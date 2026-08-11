@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.0.0 — self-contained, no npm needed
+// PGAutoPilot v2.0.1 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;
@@ -17853,7 +17853,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.0.0"
+    version: "2.0.1"
   });
   let config = null;
   let configError = null;
