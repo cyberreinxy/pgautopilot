@@ -32,7 +32,10 @@ import {
   schemaToText,
   relationsToText,
   getTableStats,
+  getOverviewRowCounts,
   invalidateSchemaCache,
+  setSchemas,
+  tableDisplayName,
 } from "./schema.js";
 import type { TableSchema } from "./schema.js";
 import { buildSqlDataDump } from "./sqlDump.js";
@@ -55,6 +58,7 @@ import {
   buildUpsert,
   buildCount,
   quoteIdent,
+  qualifiedTable,
 } from "./sqlBuilder.js";
 import { poolStats } from "./db.js";
 import type { AppConfig } from "./config.js";
@@ -129,7 +133,8 @@ function columnSet(table: TableSchema): Set<string> {
 }
 
 function decodePgError(err: unknown, mode: "development" | "production"): string {
-  if (!err || typeof err !== "object") return mode === "development" ? String(err) : "Database error";
+  if (!err || typeof err !== "object")
+    return mode === "development" ? String(err) : "Database error";
   const e = err as {
     code?: string;
     detail?: string;
@@ -197,6 +202,7 @@ function textResponse(data: unknown) {
 }
 
 export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfig) {
+  setSchemas(config.schemas);
   const startTime = Date.now();
   let requestCount = 0;
   let lastSuccessAt: number | null = null;
@@ -214,32 +220,35 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
     db_overview: async () => {
       const t0 = Date.now();
       const tables = await getSchema(pool);
-      const names = tables.map((t) => t.name);
 
-      const estimateResult = names.length
-        ? await pool.query<{ relname: string; estimate: number }>(
-            `SELECT relname, GREATEST(reltuples::bigint, 0) AS estimate FROM pg_class WHERE relname = ANY($1)`,
-            [names],
-          )
-        : { rows: [] as { relname: string; estimate: number }[] };
-      const estimates = new Map(estimateResult.rows.map((r) => [r.relname, Number(r.estimate)]));
-
-      const totalRows = [...estimates.values()].reduce((sum, n) => sum + n, 0);
+      const counts = await getOverviewRowCounts(pool, tables);
+      let total = 0;
+      const tableLines = tables.map((t) => {
+        const key = `${t.schema}.${t.name}`;
+        const row = counts.get(key);
+        const label = row?.exact
+          ? `${row.count!.toLocaleString().padStart(9)} rows`
+          : row && row.count !== null
+            ? `~${row.count.toLocaleString().padStart(8)} rows (estimate)`
+            : `        ? rows (count unavailable)`;
+        if (row && row.count !== null) total += row.count;
+        const err = t.loadError ? `  (Error: ${t.loadError})` : "";
+        return `  ${tableDisplayName(t.schema, t.name).padEnd(28)} ${label}${err}`;
+      });
 
       const lines = [
         "PostgreSQL Database Overview",
         "",
         `Mode: ${safety.mode} | ${safety.readonly ? "READ-ONLY" : "Read-Write"}`,
         "",
-        `TABLES (${tables.length}, ~${totalRows.toLocaleString()} rows total, estimates)`,
-        ...tables.map(
-          (t) => `  ${t.name.padEnd(28)} ~${String(estimates.get(t.name) ?? 0).padStart(8)} rows`,
-        ),
+        `TABLES (${tables.length}, ~${total.toLocaleString()} rows total)`,
+        ...tableLines,
         "",
         relationsToText(tables),
         "SAFETY",
         `  Sensitive columns redacted: ${[...safety.sensitiveColumns].join(", ")}`,
         `  Blocked tables: ${safety.blockedTables.size ? [...safety.blockedTables].join(", ") : "none"}`,
+        `  High-risk tables: ${safety.highRiskTables.size ? [...safety.highRiskTables].join(", ") : "none"}`,
         "",
         "Use db_schema for full column detail, db_table_info for exact counts and indexes on one table.",
       ];
@@ -318,8 +327,12 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const whereFragment = buildWhere(where, validColumns, 1);
       const orderClause = buildOrderBy(orderBy, validColumns);
 
-      const sql = `SELECT ${columns} FROM ${quoteIdent(table.name)} ${whereFragment.text} ${orderClause} LIMIT ${take} OFFSET ${skip}`;
-      const countFragment = buildCount(table.name, where, validColumns);
+      const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} ${orderClause} LIMIT ${take} OFFSET ${skip}`;
+      const countFragment = buildCount(
+        qualifiedTable(table.schema, table.name),
+        where,
+        validColumns,
+      );
 
       const [rowsResult, countResult] = await Promise.all([
         pool.query(sql, whereFragment.values),
@@ -330,7 +343,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       logRequest("db_find_many", Date.now() - t0);
 
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         count: rowsResult.rows.length,
         total,
         page: skip > 0 ? Math.floor(skip / take) + 1 : 1,
@@ -350,7 +363,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const columns = buildSelectColumns(select, validColumns);
       const whereFragment = buildWhere(where, validColumns, 1);
 
-      const sql = `SELECT ${columns} FROM ${quoteIdent(table.name)} ${whereFragment.text} LIMIT 1`;
+      const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} LIMIT 1`;
       const result = await pool.query(sql, whereFragment.values);
 
       logRequest("db_find_first", Date.now() - t0);
@@ -363,12 +376,12 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
 
-      const fragment = buildCount(table.name, where, validColumns);
+      const fragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const result = await pool.query<{ count: number }>(fragment.text, fragment.values);
 
       logRequest("db_count", Date.now() - t0);
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         count: result.rows[0]?.count ?? 0,
       });
     },
@@ -435,12 +448,12 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
 
       const take = Math.min(toNonNegativeInt(args.take, 50), MAX_TAKE);
       const groupClause = groupCols.map((c) => quoteIdent(c)).join(", ");
-      const sql = `SELECT ${selectExprs.join(", ")} FROM ${quoteIdent(table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
+      const sql = `SELECT ${selectExprs.join(", ")} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
 
       const result = await pool.query(sql, whereFragment.values);
       logRequest("db_aggregate", Date.now() - t0);
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         groupBy: groupCols,
         count: result.rows.length,
         data: redactAggregateRows(result.rows, safety, groupCols, aggregates),
@@ -462,7 +475,9 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const normalizedSql = strippedSql.toUpperCase().replace(/;\s*$/, "").trim();
       const isSelect = /^SELECT\b/.test(normalizedSql);
 
-      if (/\b(PG_AUTHID|PG_SHADOW|PG_AUTH_MEMBERS|PG_ROLES|PG_USER|PG_GROUP)\b/.test(normalizedSql)) {
+      if (
+        /\b(PG_AUTHID|PG_SHADOW|PG_AUTH_MEMBERS|PG_ROLES|PG_USER|PG_GROUP)\b/.test(normalizedSql)
+      ) {
         throw new Error("Querying PostgreSQL authentication catalogs is not permitted.");
       }
 
@@ -493,6 +508,10 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
             `LIMIT value (${limitValue}) exceeds maximum allowed (${MAX_RAW_TAKE}). Use a smaller limit or paginate.`,
           );
         }
+      } else if (safety.readonly) {
+        throw new Error(
+          "Raw write statements are blocked while the server is read-only (--readonly).",
+        );
       } else if (!args.confirmed) {
         throw new Error(
           "Only SELECT queries are allowed via db_raw_query. A non-SELECT statement requires explicit user confirmation (confirmed: true) and a server with ALLOW_RAW_WRITES enabled.",
@@ -525,8 +544,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         });
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
-        const suggestion =
-          safety.mode === "development" ? await suggestDbNames(pool, err) : null;
+        const suggestion = safety.mode === "development" ? await suggestDbNames(pool, err) : null;
         const message = decodePgError(err, safety.mode);
         throw new Error(suggestion ? `${message} ${suggestion}` : message);
       } finally {
@@ -538,6 +556,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const table = await resolveTableName(pool, args.table);
       const access = checkWriteAccess(table.name, "create", safety);
       if (access.blocked) throw new Error(access.message);
+      const warnings = access.warning ? [access.warning] : [];
 
       const data = parseJsonObject(args.data, "data");
       if (!data) throw new Error("data parameter is required");
@@ -546,21 +565,23 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldCreate: cleaned,
           ...(stripped.length > 0 && { strippedFields: stripped }),
+          ...(warnings.length > 0 && { warnings }),
           message: "DRY RUN -- nothing was created.",
         });
       }
 
       const validColumns = columnSet(table);
-      const fragment = buildInsert(table.name, cleaned, validColumns);
+      const fragment = buildInsert(qualifiedTable(table.schema, table.name), cleaned, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
           created: redactRow(result.rows[0], safety),
           ...(stripped.length > 0 && { strippedFields: stripped }),
+          ...(warnings.length > 0 && { warnings }),
         });
       } catch (err) {
         throw new Error(decodePgError(err, safety.mode));
@@ -571,6 +592,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const table = await resolveTableName(pool, args.table);
       const access = checkWriteAccess(table.name, "upsert", safety);
       if (access.blocked) throw new Error(access.message);
+      const warnings = access.warning ? [access.warning] : [];
 
       const where = parseJsonObject(args.where, "where");
       if (!where) throw new Error("where parameter is required for upsert");
@@ -586,7 +608,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (!matched) {
         const available = table.uniqueColumnSets.map((s) => s.join("+")).join(", ") || "none";
         throw new Error(
-          `where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${table.name}". Available: ${available}`,
+          `where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(table.schema, table.name)}". Available: ${available}`,
         );
       }
 
@@ -604,22 +626,30 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldInsert: cleanedInsert,
           wouldUpdate: cleanedUpdate,
           ...(stripped.length > 0 && { strippedFields: stripped }),
+          ...(warnings.length > 0 && { warnings }),
           message: "DRY RUN -- nothing was upserted.",
         });
       }
 
       const validColumns = columnSet(table);
-      const fragment = buildUpsert(table.name, cleanedInsert, cleanedUpdate, matched, validColumns);
+      const fragment = buildUpsert(
+        qualifiedTable(table.schema, table.name),
+        cleanedInsert,
+        cleanedUpdate,
+        matched,
+        validColumns,
+      );
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
           upserted: redactRow(result.rows[0], safety),
           ...(stripped.length > 0 && { strippedFields: stripped }),
+          ...(warnings.length > 0 && { warnings }),
         });
       } catch (err) {
         throw new Error(decodePgError(err, safety.mode));
@@ -637,7 +667,11 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const { cleaned, stripped } = sanitizeWriteData(data, safety);
 
       const validColumns = columnSet(table);
-      const countFragment = buildCount(table.name, where, validColumns);
+      const countFragment = buildCount(
+        qualifiedTable(table.schema, table.name),
+        where,
+        validColumns,
+      );
       const countResult = await pool.query<{ count: number }>(
         countFragment.text,
         countFragment.values,
@@ -649,7 +683,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           matched,
           wouldSet: cleaned,
           ...(stripped.length > 0 && { strippedFields: stripped }),
@@ -666,12 +700,17 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         }
       }
 
-      const fragment = buildUpdate(table.name, cleaned, where, validColumns);
+      const fragment = buildUpdate(
+        qualifiedTable(table.schema, table.name),
+        cleaned,
+        where,
+        validColumns,
+      );
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           matched: result.rowCount ?? 0,
           ...(stripped.length > 0 && { strippedFields: stripped }),
           ...(warnings.length > 0 && { warnings }),
@@ -690,7 +729,11 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const where = parseJsonObject(args.where, "where");
       const validColumns = columnSet(table);
 
-      const countFragment = buildCount(table.name, where, validColumns);
+      const countFragment = buildCount(
+        qualifiedTable(table.schema, table.name),
+        where,
+        validColumns,
+      );
       const countResult = await pool.query<{ count: number }>(
         countFragment.text,
         countFragment.values,
@@ -702,7 +745,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldDelete: matched,
           ...(warnings.length > 0 && { warnings }),
           message: `DRY RUN -- ${matched} row(s) would be deleted.`,
@@ -717,12 +760,12 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         }
       }
 
-      const fragment = buildDelete(table.name, where, validColumns);
+      const fragment = buildDelete(qualifiedTable(table.schema, table.name), where, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           deleted: result.rowCount ?? 0,
           ...(warnings.length > 0 && { warnings }),
           message: `${result.rowCount ?? 0} row(s) deleted.`,

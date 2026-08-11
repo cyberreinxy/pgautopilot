@@ -7,6 +7,10 @@ export function quoteIdent(name: string): string {
   return `"${name}"`;
 }
 
+export function qualifiedTable(schema: string, name: string): string {
+  return `${quoteIdent(schema)}.${quoteIdent(name)}`;
+}
+
 function assertKnownColumn(column: string, validColumns: Set<string>): void {
   if (!validColumns.has(column)) {
     throw new Error(
@@ -143,7 +147,7 @@ export function buildInsert(
   const values = columns.map((c) => data[c]);
 
   return {
-    text: `INSERT INTO ${quoteIdent(table)} (${idents}) VALUES (${placeholders}) RETURNING *`,
+    text: `INSERT INTO ${table} (${idents}) VALUES (${placeholders}) RETURNING *`,
     values,
   };
 }
@@ -165,7 +169,7 @@ export function buildUpdate(
   values.push(...whereFragment.values);
 
   return {
-    text: `UPDATE ${quoteIdent(table)} SET ${setClauses} ${whereFragment.text} RETURNING *`,
+    text: `UPDATE ${table} SET ${setClauses} ${whereFragment.text} RETURNING *`,
     values,
   };
 }
@@ -177,7 +181,7 @@ export function buildDelete(
 ): BuiltFragment {
   const whereFragment = buildWhere(where, validColumns, 1);
   return {
-    text: `DELETE FROM ${quoteIdent(table)} ${whereFragment.text} RETURNING *`,
+    text: `DELETE FROM ${table} ${whereFragment.text} RETURNING *`,
     values: whereFragment.values,
   };
 }
@@ -214,7 +218,7 @@ export function buildUpsert(
   }
 
   return {
-    text: `INSERT INTO ${quoteIdent(table)} (${insertIdents}) VALUES (${insertPlaceholders}) ON CONFLICT (${conflictIdents}) DO UPDATE SET ${setClause} RETURNING *`,
+    text: `INSERT INTO ${table} (${insertIdents}) VALUES (${insertPlaceholders}) ON CONFLICT (${conflictIdents}) DO UPDATE SET ${setClause} RETURNING *`,
     values,
   };
 }
@@ -226,7 +230,7 @@ export function buildCount(
 ): BuiltFragment {
   const whereFragment = buildWhere(where, validColumns, 1);
   return {
-    text: `SELECT COUNT(*)::int AS count FROM ${quoteIdent(table)} ${whereFragment.text}`,
+    text: `SELECT COUNT(*)::int AS count FROM ${table} ${whereFragment.text}`,
     values: whereFragment.values,
   };
 }

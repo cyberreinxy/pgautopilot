@@ -1,6 +1,6 @@
 {
   "name": "pgautopilot",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "type": "module",
   "description": "PGAutoPilot — an MCP server that lets AI assistants safely explore, query, and manage any PostgreSQL database. Zero setup, auto-discovery, production-safe.",
   "main": "dist/index.js",

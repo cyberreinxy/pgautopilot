@@ -1,4 +1,6 @@
 import type { Pool } from "pg";
+import { getSchemas, resolveTableName } from "./schema.js";
+import { qualifiedTable } from "./sqlBuilder.js";
 
 const BATCH_SIZE = 2000;
 
@@ -38,31 +40,32 @@ interface TableColumn {
   identity: string;
 }
 
-async function tableColumns(pool: Pool, table: string): Promise<TableColumn[]> {
+async function tableColumns(pool: Pool, schema: string, table: string): Promise<TableColumn[]> {
   const result = await pool.query<TableColumn>(
     `SELECT a.attname AS name,
             a.attidentity AS identity
      FROM pg_attribute a
      JOIN pg_class c ON c.oid = a.attrelid
      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public'
-       AND c.relname = $1
+     WHERE n.nspname = $1
+       AND c.relname = $2
        AND a.attnum > 0
        AND NOT a.attisdropped
        AND a.attgenerated = ''
      ORDER BY a.attnum`,
-    [table],
+    [schema, table],
   );
   return result.rows;
 }
 
-async function listUserTables(pool: Pool): Promise<string[]> {
-  const result = await pool.query<{ table_name: string }>(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-     ORDER BY table_name`,
+async function listUserTables(pool: Pool): Promise<{ schema: string; name: string }[]> {
+  const result = await pool.query<{ table_schema: string; table_name: string }>(
+    `SELECT table_schema, table_name FROM information_schema.tables
+     WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
+     ORDER BY table_schema, table_name`,
+    [getSchemas()],
   );
-  return result.rows.map((r) => r.table_name);
+  return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
 }
 
 export async function buildSqlDataDump(
@@ -71,11 +74,18 @@ export async function buildSqlDataDump(
   options: { pageSize?: number } = {},
 ): Promise<string> {
   const pageSize = options.pageSize ?? BATCH_SIZE;
-  const targetTables = tables ?? (await listUserTables(pool));
+  const targetTables: { schema: string; name: string }[] = tables
+    ? await Promise.all(
+        tables.map(async (t) => {
+          const resolved = await resolveTableName(pool, t);
+          return { schema: resolved.schema, name: resolved.name };
+        }),
+      )
+    : await listUserTables(pool);
   const statements: string[] = [];
 
-  for (const table of targetTables) {
-    const columns = await tableColumns(pool, table);
+  for (const { schema, name: table } of targetTables) {
+    const columns = await tableColumns(pool, schema, table);
     if (columns.length === 0) continue;
     const colList = columns.map((c) => `"${c.name}"`).join(", ");
     const hasAlwaysIdentity = columns.some((c) => c.identity === "a");
@@ -84,7 +94,7 @@ export async function buildSqlDataDump(
     let offset = 0;
     for (;;) {
       const result = await pool.query(
-        `SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`,
+        `SELECT * FROM ${qualifiedTable(schema, table)} ORDER BY 1 LIMIT $1 OFFSET $2`,
         [pageSize, offset],
       );
       const rows = result.rows;
@@ -93,7 +103,9 @@ export async function buildSqlDataDump(
         const values = columns
           .map((c) => (row[c.name] === undefined ? "NULL" : sqlLiteral(row[c.name])))
           .join(", ");
-        statements.push(`INSERT INTO "${table}"${override} (${colList}) VALUES (${values});`);
+        statements.push(
+          `INSERT INTO ${qualifiedTable(schema, table)}${override} (${colList}) VALUES (${values});`,
+        );
       }
       if (rows.length < pageSize) break;
       offset += rows.length;
@@ -102,7 +114,7 @@ export async function buildSqlDataDump(
     const identityColumns = columns.filter((c) => c.identity === "a" || c.identity === "d");
     for (const column of identityColumns) {
       statements.push(
-        `SELECT setval(pg_get_serial_sequence('"${table}"', '${column.name}'), (SELECT COALESCE(MAX("${column.name}"), 1) FROM "${table}"));`,
+        `SELECT setval(pg_get_serial_sequence('"${schema}"."${table}"', '${column.name}'), (SELECT COALESCE(MAX("${column.name}"), 1) FROM ${qualifiedTable(schema, table)}));`,
       );
     }
   }

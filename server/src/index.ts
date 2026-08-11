@@ -62,9 +62,7 @@ function registerTools(
       }
     };
     const inputSchema =
-      def.inputSchema && "shape" in def.inputSchema
-        ? def.inputSchema.shape
-        : def.inputSchema;
+      def.inputSchema && "shape" in def.inputSchema ? def.inputSchema.shape : def.inputSchema;
     server.registerTool(
       name,
       { ...def, inputSchema } as Parameters<typeof server.registerTool>[1],
@@ -77,7 +75,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.0.1",
+    version: "2.1.0",
   });
 
   let config: ReturnType<typeof loadConfig> | null = null;
@@ -106,7 +104,9 @@ async function main() {
     registerTools(server, { mcp_status: statusHandler });
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    log.warn("PGAutoPilot started in not-configured mode. Fix DATABASE_URL in the .env and restart.");
+    log.warn(
+      "PGAutoPilot started in not-configured mode. Fix DATABASE_URL in the .env and restart.",
+    );
     return;
   }
 
@@ -121,6 +121,7 @@ async function main() {
     config.mode,
     config.blockedTables,
     config.extraSensitiveColumns,
+    config.highRiskTables,
   );
 
   try {
@@ -157,7 +158,7 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v1.0.0 ready");
+  log.info("PGAutoPilot v2.1.0 ready");
   log.info(`Connection: ${connectionSummary(config.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {

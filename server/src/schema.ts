@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { qualifiedTable } from "./sqlBuilder.js";
 
 export interface ColumnInfo {
   name: string;
@@ -10,8 +11,10 @@ export interface ColumnInfo {
 
 export interface ForeignKeyInfo {
   column: string;
+  referencesSchema: string;
   referencesTable: string;
   referencesColumn: string;
+  constraintName: string;
 }
 
 export interface IndexInfo {
@@ -21,10 +24,12 @@ export interface IndexInfo {
 }
 
 export interface TableSchema {
+  schema: string;
   name: string;
   columns: ColumnInfo[];
   foreignKeys: ForeignKeyInfo[];
   uniqueColumnSets: string[][];
+  loadError?: string;
 }
 
 interface SchemaCache {
@@ -34,17 +39,27 @@ interface SchemaCache {
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache: SchemaCache | null = null;
+let schemas: string[] = ["public"];
 
-async function fetchTables(pool: Pool): Promise<string[]> {
-  const result = await pool.query<{ table_name: string }>(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-     ORDER BY table_name`,
-  );
-  return result.rows.map((r) => r.table_name);
+export function setSchemas(next: string[]): void {
+  schemas = next.length > 0 ? next : ["public"];
 }
 
-async function fetchColumns(pool: Pool, table: string): Promise<ColumnInfo[]> {
+export function getSchemas(): string[] {
+  return schemas;
+}
+
+async function fetchTables(pool: Pool): Promise<{ schema: string; name: string }[]> {
+  const result = await pool.query<{ table_schema: string; table_name: string }>(
+    `SELECT table_schema, table_name FROM information_schema.tables
+     WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
+     ORDER BY table_schema, table_name`,
+    [schemas],
+  );
+  return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
+}
+
+async function fetchColumns(pool: Pool, schema: string, table: string): Promise<ColumnInfo[]> {
   const columnsResult = await pool.query<{
     column_name: string;
     data_type: string;
@@ -53,9 +68,9 @@ async function fetchColumns(pool: Pool, table: string): Promise<ColumnInfo[]> {
   }>(
     `SELECT column_name, data_type, is_nullable, column_default
      FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = $1
+     WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
-    [table],
+    [schema, table],
   );
 
   const pkResult = await pool.query<{ column_name: string }>(
@@ -63,8 +78,8 @@ async function fetchColumns(pool: Pool, table: string): Promise<ColumnInfo[]> {
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'`,
-    [table],
+     WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'PRIMARY KEY'`,
+    [schema, table],
   );
   const pkColumns = new Set(pkResult.rows.map((r) => r.column_name));
 
@@ -77,32 +92,46 @@ async function fetchColumns(pool: Pool, table: string): Promise<ColumnInfo[]> {
   }));
 }
 
-async function fetchForeignKeys(pool: Pool, table: string): Promise<ForeignKeyInfo[]> {
+async function fetchForeignKeys(
+  pool: Pool,
+  schema: string,
+  table: string,
+): Promise<ForeignKeyInfo[]> {
   const result = await pool.query<{
     column_name: string;
+    references_schema: string;
     references_table: string;
     references_column: string;
+    constraint_name: string;
   }>(
     `SELECT
        kcu.column_name,
+       ccu.table_schema AS references_schema,
        ccu.table_name AS references_table,
-       ccu.column_name AS references_column
+       ccu.column_name AS references_column,
+       tc.constraint_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
      JOIN information_schema.constraint_column_usage ccu
        ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'`,
-    [table],
+     WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'FOREIGN KEY'`,
+    [schema, table],
   );
   return result.rows.map((row) => ({
     column: row.column_name,
+    referencesSchema: row.references_schema,
     referencesTable: row.references_table,
     referencesColumn: row.references_column,
+    constraintName: row.constraint_name,
   }));
 }
 
-async function fetchUniqueColumnSets(pool: Pool, table: string): Promise<string[][]> {
+async function fetchUniqueColumnSets(
+  pool: Pool,
+  schema: string,
+  table: string,
+): Promise<string[][]> {
   const result = await pool.query<{
     constraint_name: string;
     column_name: string;
@@ -111,10 +140,10 @@ async function fetchUniqueColumnSets(pool: Pool, table: string): Promise<string[
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1
+     WHERE tc.table_schema = $1 AND tc.table_name = $2
        AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
      ORDER BY tc.constraint_name, kcu.ordinal_position`,
-    [table],
+    [schema, table],
   );
 
   const grouped = new Map<string, string[]>();
@@ -127,15 +156,26 @@ async function fetchUniqueColumnSets(pool: Pool, table: string): Promise<string[
 }
 
 async function loadSchema(pool: Pool): Promise<TableSchema[]> {
-  const tableNames = await fetchTables(pool);
+  const tablesInfo = await fetchTables(pool);
   const tables: TableSchema[] = [];
-  for (const name of tableNames) {
-    const [columns, foreignKeys, uniqueColumnSets] = await Promise.all([
-      fetchColumns(pool, name),
-      fetchForeignKeys(pool, name),
-      fetchUniqueColumnSets(pool, name),
-    ]);
-    tables.push({ name, columns, foreignKeys, uniqueColumnSets });
+  for (const { schema, name } of tablesInfo) {
+    try {
+      const [columns, foreignKeys, uniqueColumnSets] = await Promise.all([
+        fetchColumns(pool, schema, name),
+        fetchForeignKeys(pool, schema, name),
+        fetchUniqueColumnSets(pool, schema, name),
+      ]);
+      tables.push({ schema, name, columns, foreignKeys, uniqueColumnSets });
+    } catch (err) {
+      tables.push({
+        schema,
+        name,
+        columns: [],
+        foreignKeys: [],
+        uniqueColumnSets: [],
+        loadError: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
   return tables;
 }
@@ -151,44 +191,130 @@ export async function getSchema(pool: Pool, forceRefresh = false): Promise<Table
 
 export function invalidateSchemaCache(): void {
   cache = null;
+  countCache.clear();
+}
+
+export interface RowCount {
+  count: number | null;
+  exact: boolean;
+}
+
+const COUNT_CACHE_TTL_MS = 5 * 60 * 1000;
+const countCache = new Map<string, { count: number | null; at: number }>();
+
+export async function getOverviewRowCounts(
+  pool: Pool,
+  tables: TableSchema[],
+): Promise<Map<string, RowCount>> {
+  const result = new Map<string, RowCount>();
+  if (tables.length === 0) return result;
+
+  const estimateResult = await pool.query<{
+    nspname: string;
+    relname: string;
+    estimate: number;
+  }>(
+    `SELECT n.nspname, c.relname, GREATEST(c.reltuples::bigint, 0) AS estimate
+     FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = ANY($1) AND c.relname = ANY($2)`,
+    [schemas, tables.map((t) => t.name)],
+  );
+  const estimates = new Map(
+    estimateResult.rows.map((r) => [`${r.nspname}.${r.relname}`, Number(r.estimate)]),
+  );
+
+  await Promise.all(
+    tables.map(async (t) => {
+      const key = `${t.schema}.${t.name}`;
+      const estimate = estimates.get(key) ?? 0;
+      if (estimate > 0) {
+        result.set(key, { count: estimate, exact: false });
+        return;
+      }
+      const cached = countCache.get(key);
+      if (cached && Date.now() - cached.at < COUNT_CACHE_TTL_MS) {
+        result.set(key, { count: cached.count, exact: cached.count !== null });
+        return;
+      }
+      let exact: number | null = null;
+      try {
+        const r = await pool.query<{ count: number }>(
+          `SELECT COUNT(*)::int AS count FROM ${qualifiedTable(t.schema, t.name)}`,
+        );
+        exact = r.rows[0]?.count ?? 0;
+      } catch {
+        exact = null;
+      }
+      countCache.set(key, { count: exact, at: Date.now() });
+      result.set(key, { count: exact, exact: exact !== null });
+    }),
+  );
+
+  return result;
+}
+
+function assertLoadable(table: TableSchema): TableSchema {
+  if (table.loadError) {
+    throw new Error(
+      `Table "${tableDisplayName(table.schema, table.name)}" could not be fully introspected: ${table.loadError}`,
+    );
+  }
+  return table;
+}
+
+export function tableDisplayName(schema: string, name: string): string {
+  return schemas.length === 1 && schemas[0] === "public" ? name : `${schema}.${name}`;
 }
 
 export async function resolveTableName(pool: Pool, input: string): Promise<TableSchema> {
   const tables = await getSchema(pool);
 
-  const exact = tables.find((t) => t.name === input);
-  if (exact) return exact;
+  const exactQualified = tables.filter((t) => `${t.schema}.${t.name}` === input);
+  if (exactQualified.length > 1) {
+    throw new Error(
+      `Table name "${input}" is ambiguous (${exactQualified.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
+    );
+  }
+  const exact = exactQualified[0];
+  if (exact) return assertLoadable(exact);
 
   const lower = input.toLowerCase();
-  const matches = tables.filter((t) => t.name.toLowerCase() === lower);
-  const unique = matches.length === 1 ? matches[0] : undefined;
-  if (unique) return unique;
+  const matches = tables.filter(
+    (t) => t.name.toLowerCase() === lower || `${t.schema}.${t.name}`.toLowerCase() === lower,
+  );
+  const unique = matches[0];
+  if (unique && matches.length === 1) return assertLoadable(unique);
   if (matches.length > 1) {
     throw new Error(
-      `Table name "${input}" is ambiguous (${matches.map((t) => t.name).join(", ")}). Use the exact case.`,
+      `Table name "${input}" is ambiguous (${matches.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
     );
   }
 
   const suggestions = tables
-    .filter((t) => t.name.toLowerCase().includes(lower))
+    .filter(
+      (t) =>
+        `${t.schema}.${t.name}`.toLowerCase().includes(lower) ||
+        t.name.toLowerCase().includes(lower),
+    )
     .slice(0, 3)
-    .map((t) => t.name);
+    .map((t) => tableDisplayName(t.schema, t.name));
   const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
   throw new Error(
-    `Table "${input}" not found. Available: ${tables.map((t) => t.name).join(", ")}.${hint}`,
+    `Table "${input}" not found. Available: ${tables.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}.${hint}`,
   );
 }
 
 export function schemaToText(tables: TableSchema[]): string {
   const lines = ["DATABASE SCHEMA", "===============", ""];
   for (const table of tables) {
-    lines.push(`[TABLE] ${table.name}`);
+    lines.push(`[TABLE] ${tableDisplayName(table.schema, table.name)}`);
     for (const col of table.columns) {
       const badges: string[] = [];
       if (col.isPrimaryKey) badges.push("PK");
       if (!col.nullable && !col.isPrimaryKey) badges.push("required");
       const fk = table.foreignKeys.find((f) => f.column === col.name);
-      if (fk) badges.push(`-> ${fk.referencesTable}.${fk.referencesColumn}`);
+      if (fk) badges.push(`-> ${referenceDisplay(fk)}`);
       const badge = badges.length ? ` [${badges.join(", ")}]` : "";
       lines.push(`  - ${col.name}: ${col.dataType}${badge}`);
     }
@@ -197,15 +323,29 @@ export function schemaToText(tables: TableSchema[]): string {
   return lines.join("\n");
 }
 
+function referenceDisplay(fk: ForeignKeyInfo): string {
+  const table =
+    schemas.length > 1 ? `${fk.referencesSchema}.${fk.referencesTable}` : fk.referencesTable;
+  return `${table}.${fk.referencesColumn}`;
+}
+
+function semanticRelationLabel(fk: ForeignKeyInfo): string {
+  const constraint = fk.constraintName ?? "";
+  if (constraint === "" || /_fkey$/i.test(constraint)) {
+    return `${fk.column} -> ${referenceDisplay(fk)}`;
+  }
+  return `${fk.column} -> ${referenceDisplay(fk)} [${constraint}]`;
+}
+
 export function relationsToText(tables: TableSchema[]): string {
   const lines = ["RELATIONSHIPS", "============", ""];
   let hasAny = false;
   for (const table of tables) {
     if (table.foreignKeys.length === 0) continue;
     hasAny = true;
-    lines.push(table.name);
+    lines.push(tableDisplayName(table.schema, table.name));
     for (const fk of table.foreignKeys) {
-      lines.push(`  -> ${fk.column} -> ${fk.referencesTable}.${fk.referencesColumn}`);
+      lines.push(`  -> ${semanticRelationLabel(fk)}`);
     }
     lines.push("");
   }
@@ -225,15 +365,18 @@ export async function getTableStats(pool: Pool, table: TableSchema): Promise<Tab
   const [sizeResult, countResult, indexResult] = await Promise.all([
     pool.query<{ size: string }>(
       `SELECT pg_size_pretty(pg_total_relation_size($1::regclass)) AS size`,
-      [`"${table.name}"`],
+      [`"${table.schema}"."${table.name}"`],
     ),
     pool.query<{ estimate: number }>(
-      `SELECT reltuples::bigint AS estimate FROM pg_class WHERE relname = $1`,
-      [table.name],
+      `SELECT GREATEST(c.reltuples::bigint, 0) AS estimate
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2`,
+      [table.schema, table.name],
     ),
     pool.query<{ indexname: string; indexdef: string }>(
-      `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1`,
-      [table.name],
+      `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = ANY($1) AND tablename = $2`,
+      [schemas, table.name],
     ),
   ]);
 
@@ -248,7 +391,7 @@ export async function getTableStats(pool: Pool, table: TableSchema): Promise<Tab
   });
 
   return {
-    table: table.name,
+    table: tableDisplayName(table.schema, table.name),
     approxRowCount: Math.max(0, Number(countResult.rows[0]?.estimate ?? 0)),
     columns: table.columns,
     foreignKeys: table.foreignKeys,

@@ -40,7 +40,9 @@ export const TableInfoArgs = TableArg;
 export const RawQueryArgs = z.object({
   sql: z
     .string()
-    .describe("Raw SQL statement. SELECT (must end with LIMIT) by default; non-SELECT requires confirmed: true and ALLOW_RAW_WRITES on the server"),
+    .describe(
+      "Raw SQL statement. SELECT (must end with LIMIT) by default; non-SELECT requires confirmed: true, ALLOW_RAW_WRITES on the server, and a server that is not read-only",
+    ),
   confirmed: z
     .boolean()
     .optional()

@@ -63,13 +63,13 @@ export function detectDatabaseUrlConflict(
   if (processUrl && fileUrl && processUrl !== fileUrl) {
     throw new Error(
       `Conflicting DATABASE_URL values detected.\n\n` +
-      `  ${envFile.envFilePath} defines:\n` +
-      `    DATABASE_URL=${maskCredentials(fileUrl)}\n\n` +
-      `  The process environment defines:\n` +
-      `    DATABASE_URL=${maskCredentials(processUrl)}\n\n` +
-      `These differ, so it is ambiguous which database to use. Pick one by ` +
-      `unsetting the environment variable OR removing DATABASE_URL from the .env file, ` +
-      `then restart the MCP server.`,
+        `  ${envFile.envFilePath} defines:\n` +
+        `    DATABASE_URL=${maskCredentials(fileUrl)}\n\n` +
+        `  The process environment defines:\n` +
+        `    DATABASE_URL=${maskCredentials(processUrl)}\n\n` +
+        `These differ, so it is ambiguous which database to use. Pick one by ` +
+        `unsetting the environment variable OR removing DATABASE_URL from the .env file, ` +
+        `then restart the MCP server.`,
     );
   }
 
@@ -91,9 +91,11 @@ export interface AppConfig {
   backupDir: string;
   dockerContainer: string | null;
   blockedTables: Set<string>;
+  highRiskTables: Set<string>;
   extraSensitiveColumns: Set<string>;
   statementTimeoutMs: number;
   allowRawWrites: boolean;
+  schemas: string[];
 }
 
 function isLocalHost(host: string): boolean {
@@ -144,6 +146,14 @@ function parseList(value: string | undefined): Set<string> {
   );
 }
 
+function parseSchemas(value: string | undefined): string[] {
+  const schemas = (value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return schemas.length > 0 ? schemas : ["public"];
+}
+
 export function loadConfig(argv: string[]): AppConfig {
   const envFile = loadDotEnv();
   const resolveDb = detectDatabaseUrlConflict(envFile, process.env);
@@ -158,15 +168,15 @@ export function loadConfig(argv: string[]): AppConfig {
   if (!databaseUrl) {
     throw new Error(
       "DATABASE_URL is not set.\n\n" +
-      `  Looking for a ".env" file in the current working directory:\n` +
-      `    ${envFile.envFilePath}\n\n` +
-      "  Create a .env file there with:\n\n" +
-      "    DATABASE_URL=postgresql://user:password@localhost:5432/yourdb\n\n" +
-      "  PGAutoPilot always reads DATABASE_URL from the .env file in the " +
-      "working directory of the MCP server process. If the wrong (or no) " +
-      "database is used, make sure the .env that matches this project is " +
-      "the one in the folder the editor opened.\n\n" +
-      `  DATABASE_URL was not found in ${resolveDb.from.join(" or ") || "any source"}.`,
+        `  Looking for a ".env" file in the current working directory:\n` +
+        `    ${envFile.envFilePath}\n\n` +
+        "  Create a .env file there with:\n\n" +
+        "    DATABASE_URL=postgresql://user:password@localhost:5432/yourdb\n\n" +
+        "  PGAutoPilot always reads DATABASE_URL from the .env file in the " +
+        "working directory of the MCP server process. If the wrong (or no) " +
+        "database is used, make sure the .env that matches this project is " +
+        "the one in the folder the editor opened.\n\n" +
+        `  DATABASE_URL was not found in ${resolveDb.from.join(" or ") || "any source"}.`,
     );
   }
 
@@ -199,10 +209,11 @@ export function loadConfig(argv: string[]): AppConfig {
     backupDir: process.env.BACKUPS_DIR ?? "./backups",
     dockerContainer: process.env.DOCKER_CONTAINER ?? null,
     blockedTables: parseList(process.env.BLOCKED_TABLES),
+    highRiskTables: parseList(process.env.HIGH_RISK_TABLES),
     extraSensitiveColumns: parseList(process.env.SENSITIVE_COLUMNS),
     statementTimeoutMs: finalTimeoutMs,
-    allowRawWrites:
-      process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
+    allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
+    schemas: parseSchemas(process.env.PG_SCHEMAS),
   };
 }
 

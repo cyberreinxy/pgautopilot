@@ -380,7 +380,9 @@ pgautopilot --readonly --mode=production
 | `BACKUPS_DIR`             | `./backups`   | Where `db_backup` saves files                            |
 | `DOCKER_CONTAINER`        | -             | Docker container name for `pg_dump` fallback             |
 | `BLOCKED_TABLES`          | -             | Tables to block writes on (comma-separated)               |
+| `HIGH_RISK_TABLES`        | -             | Tables that warn but allow writes (comma-separated)       |
 | `SENSITIVE_COLUMNS`       | -             | Extra columns to redact (comma-separated)                 |
+| `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)        |
 | `NODE_ENV`                | `development` | `production` disables per-request logging                 |
 
 **Connection string examples:**

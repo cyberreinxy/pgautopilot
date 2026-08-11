@@ -12,9 +12,11 @@ const CONFIG: AppConfig = {
   backupDir: "./backups",
   dockerContainer: null,
   blockedTables: new Set(),
+  highRiskTables: new Set(),
   extraSensitiveColumns: new Set(),
   statementTimeoutMs: 10000,
   allowRawWrites: false,
+  schemas: ["public"],
 };
 
 function createStubPool(rowsForQuery: (text: string) => unknown[] = () => []): Pool {
@@ -27,7 +29,7 @@ function createStubPool(rowsForQuery: (text: string) => unknown[] = () => []): P
     query: async (text: string) => {
       const sql = String(text);
       if (/information_schema\.tables/.test(sql)) {
-        return { rows: [{ table_name: "users" }], rowCount: 1 };
+        return { rows: [{ table_schema: "public", table_name: "users" }], rowCount: 1 };
       }
       if (/information_schema\.columns/.test(sql)) {
         return {
@@ -67,6 +69,10 @@ function developmentSafety() {
   return buildSafetyState(false, "development", new Set(), new Set());
 }
 
+function readonlySafety() {
+  return buildSafetyState(true, "development", new Set(), new Set());
+}
+
 function firstText(result: { content: { type: string; text: string }[] }): unknown {
   return JSON.parse(result.content[0]?.text ?? "");
 }
@@ -76,54 +82,67 @@ describe("db_raw_query validation", () => {
 
   it("rejects multi-statement SQL", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT 1; SELECT 2", confirmed: false })).rejects.toThrow(
-      /Multi-statement/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT 1; SELECT 2", confirmed: false }),
+    ).rejects.toThrow(/Multi-statement/);
   });
 
   it("rejects non-SELECT SQL", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "DELETE FROM users", confirmed: false })).rejects.toThrow(
-      /Only SELECT/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "DELETE FROM users", confirmed: false }),
+    ).rejects.toThrow(/Only SELECT/);
   });
 
   it("blocks authentication catalog queries", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT * FROM pg_authid LIMIT 1", confirmed: false })).rejects.toThrow(
-      /authentication catalogs/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT * FROM pg_authid LIMIT 1", confirmed: false }),
+    ).rejects.toThrow(/authentication catalogs/);
   });
 
   it("rejects dangerous functions", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT pg_sleep(10) LIMIT 1", confirmed: false })).rejects.toThrow(
-      /Dangerous/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT pg_sleep(10) LIMIT 1", confirmed: false }),
+    ).rejects.toThrow(/Dangerous/);
   });
 
   it("requires a terminal LIMIT clause", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT * FROM users", confirmed: false })).rejects.toThrow(/LIMIT/);
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT * FROM users", confirmed: false }),
+    ).rejects.toThrow(/LIMIT/);
   });
 
   it("does not accept a fake LIMIT inside a string literal", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT 'LIMIT 1' FROM users", confirmed: false })).rejects.toThrow(
-      /LIMIT/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT 'LIMIT 1' FROM users", confirmed: false }),
+    ).rejects.toThrow(/LIMIT/);
   });
 
   it("rejects LIMIT above the cap", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    await expect(handlers.db_raw_query({ sql: "SELECT * FROM users LIMIT 99999", confirmed: false })).rejects.toThrow(
-      /exceeds maximum/,
-    );
+    await expect(
+      handlers.db_raw_query({ sql: "SELECT * FROM users LIMIT 99999", confirmed: false }),
+    ).rejects.toThrow(/exceeds maximum/);
+  });
+
+  it("blocks raw writes in read-only mode even when confirmed and enabled", async () => {
+    const config = { ...CONFIG, allowRawWrites: true };
+    const handlers = createHandlers(createStubPool(), readonlySafety(), config);
+    await expect(
+      handlers.db_raw_query({ sql: "UPDATE users SET email='x'", confirmed: true }),
+    ).rejects.toThrow(/read-only/);
   });
 
   it("accepts a valid SELECT with terminal LIMIT", async () => {
     const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
-    const result = await handlers.db_raw_query({ sql: "SELECT id FROM users LIMIT 5", confirmed: false });
+    const result = await handlers.db_raw_query({
+      sql: "SELECT id FROM users LIMIT 5",
+      confirmed: false,
+    });
     expect(result.content[0]?.type).toBe("text");
   });
 });
@@ -179,5 +198,21 @@ describe("db_update_many confirmAll gate", () => {
       confirmAll: true,
     });
     expect(result.content[0]?.type).toBe("text");
+  });
+});
+
+describe("db_create high-risk warning", () => {
+  beforeEach(() => invalidateSchemaCache());
+
+  it("surfaces a HIGH-RISK warning on dry-run writes", async () => {
+    const safety = buildSafetyState(false, "development", new Set(), new Set(), new Set(["users"]));
+    const handlers = createHandlers(createStubPool(), safety, CONFIG);
+    const result = await handlers.db_create({
+      table: "users",
+      data: '{"email":"a@b.com"}',
+      dryRun: true,
+    });
+    const payload = firstText(result) as { warnings?: string[] };
+    expect(payload.warnings).toEqual([expect.stringContaining("HIGH-RISK")]);
   });
 });

@@ -94,4 +94,21 @@ describe("checkWriteAccess", () => {
   it("allows writes on writable tables", () => {
     expect(checkWriteAccess("users", "update", writableSafety()).blocked).toBe(false);
   });
+
+  it("warns but allows high-risk tables", () => {
+    const safety = buildSafetyState(false, "development", new Set(), new Set(), new Set(["users"]));
+    const result = checkWriteAccess("users", "update", safety);
+    expect(result).toMatchObject({ blocked: false, warning: expect.stringContaining("HIGH-RISK") });
+  });
+
+  it("blocks a table listed as both blocked and high-risk", () => {
+    const safety = buildSafetyState(
+      false,
+      "development",
+      new Set(["secret_table"]),
+      new Set(),
+      new Set(["secret_table"]),
+    );
+    expect(checkWriteAccess("secret_table", "update", safety).blocked).toBe(true);
+  });
 });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.0.1 — self-contained, no npm needed
+// PGAutoPilot v2.1.0 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;
@@ -7910,12 +7910,12 @@ var ZodTuple = class _ZodTuple extends ZodType {
     });
   }
 };
-ZodTuple.create = (schemas, params) => {
-  if (!Array.isArray(schemas)) {
+ZodTuple.create = (schemas2, params) => {
+  if (!Array.isArray(schemas2)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
   }
   return new ZodTuple({
-    items: schemas,
+    items: schemas2,
     typeName: ZodFirstPartyTypeKind.ZodTuple,
     rest: null,
     ...processCreateParams(params)
@@ -12315,6 +12315,10 @@ function parseList(value) {
     return /* @__PURE__ */ new Set();
   return new Set(value.split(",").map((v) => v.trim()).filter(Boolean));
 }
+function parseSchemas(value) {
+  const schemas2 = (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return schemas2.length > 0 ? schemas2 : ["public"];
+}
 function loadConfig(argv) {
   const envFile = loadDotEnv();
   const resolveDb = detectDatabaseUrlConflict(envFile, process.env);
@@ -12360,9 +12364,11 @@ function loadConfig(argv) {
     backupDir: process.env.BACKUPS_DIR ?? "./backups",
     dockerContainer: process.env.DOCKER_CONTAINER ?? null,
     blockedTables: parseList(process.env.BLOCKED_TABLES),
+    highRiskTables: parseList(process.env.HIGH_RISK_TABLES),
     extraSensitiveColumns: parseList(process.env.SENSITIVE_COLUMNS),
     statementTimeoutMs: finalTimeoutMs,
-    allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1"
+    allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
+    schemas: parseSchemas(process.env.PG_SCHEMAS)
   };
 }
 function connectionSummary(poolConfig) {
@@ -12428,11 +12434,11 @@ var DEFAULT_SENSITIVE_COLUMNS = /* @__PURE__ */ new Set([
   "cvv",
   "rolpassword"
 ]);
-function buildSafetyState(readonly, mode, blockedTables, extraSensitiveColumns) {
+function buildSafetyState(readonly, mode, blockedTables, extraSensitiveColumns, highRiskTables = /* @__PURE__ */ new Set()) {
   const sensitiveColumns = new Set(DEFAULT_SENSITIVE_COLUMNS);
   for (const col of extraSensitiveColumns)
     sensitiveColumns.add(col.toLowerCase());
-  return { readonly, mode, blockedTables, sensitiveColumns };
+  return { readonly, mode, blockedTables, highRiskTables, sensitiveColumns };
 }
 function isSensitive(column, safety) {
   return safety.sensitiveColumns.has(column.toLowerCase());
@@ -12503,6 +12509,12 @@ function checkWriteAccess(table, operation, safety) {
     return {
       blocked: true,
       message: `[BLOCKED] "${table}" is in BLOCKED_TABLES and cannot be written to via MCP.`
+    };
+  }
+  if (safety.highRiskTables.has(table.toLowerCase())) {
+    return {
+      blocked: false,
+      warning: `[HIGH-RISK] "${table}" is in HIGH_RISK_TABLES. Proceed with caution; verify the operation before executing.`
     };
   }
   return { blocked: false, warning: null };
@@ -15320,12 +15332,12 @@ var ZodTuple2 = class _ZodTuple extends ZodType2 {
     });
   }
 };
-ZodTuple2.create = (schemas, params) => {
-  if (!Array.isArray(schemas)) {
+ZodTuple2.create = (schemas2, params) => {
+  if (!Array.isArray(schemas2)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
   }
   return new ZodTuple2({
-    items: schemas,
+    items: schemas2,
     typeName: ZodFirstPartyTypeKind2.ZodTuple,
     rest: null,
     ...processCreateParams3(params)
@@ -16459,7 +16471,7 @@ var AggregateArgs = TableArg.extend({
 });
 var TableInfoArgs = TableArg;
 var RawQueryArgs = z.object({
-  sql: z.string().describe("Raw SQL statement. SELECT (must end with LIMIT) by default; non-SELECT requires confirmed: true and ALLOW_RAW_WRITES on the server"),
+  sql: z.string().describe("Raw SQL statement. SELECT (must end with LIMIT) by default; non-SELECT requires confirmed: true, ALLOW_RAW_WRITES on the server, and a server that is not read-only"),
   confirmed: z.boolean().optional().default(false).describe("Explicit user confirmation to allow a single non-SELECT (write/DDL) statement")
 });
 var BackupArgs = z.object({
@@ -16602,25 +16614,201 @@ var import_node_child_process = require("node:child_process");
 var import_fs2 = require("fs");
 var import_path2 = require("path");
 
+// dist/sqlBuilder.js
+var IDENT_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+function quoteIdent(name) {
+  if (!IDENT_PATTERN.test(name)) {
+    throw new Error(`Invalid identifier: "${name}"`);
+  }
+  return `"${name}"`;
+}
+function qualifiedTable(schema, name) {
+  return `${quoteIdent(schema)}.${quoteIdent(name)}`;
+}
+function assertKnownColumn(column, validColumns) {
+  if (!validColumns.has(column)) {
+    throw new Error(`Unknown column "${column}". Available columns: ${[...validColumns].join(", ")}`);
+  }
+}
+var OPERATORS = {
+  equals: "=",
+  not: "!=",
+  gt: ">",
+  gte: ">=",
+  lt: "<",
+  lte: "<="
+};
+function buildWhere(where, validColumns, paramOffset) {
+  if (!where || Object.keys(where).length === 0) {
+    return { text: "", values: [] };
+  }
+  const clauses = [];
+  const values = [];
+  let paramIndex = paramOffset;
+  for (const [column, rawValue] of Object.entries(where)) {
+    assertKnownColumn(column, validColumns);
+    const ident = quoteIdent(column);
+    if (rawValue === null) {
+      clauses.push(`${ident} IS NULL`);
+      continue;
+    }
+    if (rawValue !== null && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      const condObj = rawValue;
+      for (const [op, opValue] of Object.entries(condObj)) {
+        if (op === "in" || op === "notIn") {
+          if (!Array.isArray(opValue) || opValue.length === 0) {
+            throw new Error(`"${op}" for column "${column}" requires a non-empty array`);
+          }
+          const placeholders = opValue.map(() => `$${paramIndex++}`).join(", ");
+          clauses.push(`${ident} ${op === "in" ? "IN" : "NOT IN"} (${placeholders})`);
+          values.push(...opValue);
+        } else if (op === "contains" || op === "startsWith" || op === "endsWith") {
+          const pattern = op === "contains" ? `%${opValue}%` : op === "startsWith" ? `${opValue}%` : `%${opValue}`;
+          clauses.push(`${ident} ILIKE $${paramIndex++}`);
+          values.push(pattern);
+        } else if (op in OPERATORS) {
+          clauses.push(`${ident} ${OPERATORS[op]} $${paramIndex++}`);
+          values.push(opValue);
+        } else {
+          throw new Error(`Unsupported filter operator "${op}" for column "${column}"`);
+        }
+      }
+      continue;
+    }
+    clauses.push(`${ident} = $${paramIndex++}`);
+    values.push(rawValue);
+  }
+  return { text: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", values };
+}
+function buildOrderBy(orderBy, validColumns) {
+  if (!orderBy || Object.keys(orderBy).length === 0)
+    return "";
+  const parts = [];
+  for (const [column, direction] of Object.entries(orderBy)) {
+    assertKnownColumn(column, validColumns);
+    if (typeof direction !== "string") {
+      throw new Error(`Invalid sort direction for column "${column}".`);
+    }
+    const norm = direction.toLowerCase();
+    let order = "ASC";
+    let nulls = "";
+    if (norm === "desc")
+      order = "DESC";
+    else if (norm === "asc_nulls_last")
+      nulls = " NULLS LAST";
+    else if (norm === "desc_nulls_first") {
+      order = "DESC";
+      nulls = " NULLS FIRST";
+    } else if (norm !== "asc") {
+      throw new Error(`Invalid sort direction "${direction}" for column "${column}". Use "asc", "desc", "asc_nulls_last", or "desc_nulls_first".`);
+    }
+    parts.push(`${quoteIdent(column)} ${order}${nulls}`);
+  }
+  return parts.length ? `ORDER BY ${parts.join(", ")}` : "";
+}
+function buildSelectColumns(select, validColumns) {
+  if (!select || select.length === 0)
+    return "*";
+  return select.map((c) => {
+    assertKnownColumn(c, validColumns);
+    return quoteIdent(c);
+  }).join(", ");
+}
+function buildInsert(table, data, validColumns) {
+  const columns = Object.keys(data);
+  if (columns.length === 0)
+    throw new Error("No fields provided to insert");
+  columns.forEach((c) => assertKnownColumn(c, validColumns));
+  const idents = columns.map((c) => quoteIdent(c)).join(", ");
+  const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
+  const values = columns.map((c) => data[c]);
+  return {
+    text: `INSERT INTO ${table} (${idents}) VALUES (${placeholders}) RETURNING *`,
+    values
+  };
+}
+function buildUpdate(table, data, where, validColumns) {
+  const columns = Object.keys(data);
+  if (columns.length === 0)
+    throw new Error("No fields provided to update");
+  columns.forEach((c) => assertKnownColumn(c, validColumns));
+  const setClauses = columns.map((c, i) => `${quoteIdent(c)} = $${i + 1}`).join(", ");
+  const values = columns.map((c) => data[c]);
+  const whereFragment = buildWhere(where, validColumns, values.length + 1);
+  values.push(...whereFragment.values);
+  return {
+    text: `UPDATE ${table} SET ${setClauses} ${whereFragment.text} RETURNING *`,
+    values
+  };
+}
+function buildDelete(table, where, validColumns) {
+  const whereFragment = buildWhere(where, validColumns, 1);
+  return {
+    text: `DELETE FROM ${table} ${whereFragment.text} RETURNING *`,
+    values: whereFragment.values
+  };
+}
+function buildUpsert(table, insertData, updateData, conflictColumns, validColumns) {
+  const insertColumns = Object.keys(insertData);
+  if (insertColumns.length === 0)
+    throw new Error("No fields provided to insert");
+  insertColumns.forEach((c) => assertKnownColumn(c, validColumns));
+  const insertIdents = insertColumns.map((c) => quoteIdent(c)).join(", ");
+  const insertPlaceholders = insertColumns.map((_, i) => `$${i + 1}`).join(", ");
+  const values = insertColumns.map((c) => insertData[c]);
+  const conflictIdents = conflictColumns.map((c) => quoteIdent(c)).join(", ");
+  const updateColumns = Object.keys(updateData).filter((c) => !conflictColumns.includes(c));
+  let setClause;
+  if (updateColumns.length === 0) {
+    setClause = conflictColumns.map((c) => `${quoteIdent(c)} = ${quoteIdent(c)}`).join(", ");
+  } else {
+    updateColumns.forEach((c) => assertKnownColumn(c, validColumns));
+    const parts = [];
+    for (const c of updateColumns) {
+      values.push(updateData[c]);
+      parts.push(`${quoteIdent(c)} = $${values.length}`);
+    }
+    setClause = parts.join(", ");
+  }
+  return {
+    text: `INSERT INTO ${table} (${insertIdents}) VALUES (${insertPlaceholders}) ON CONFLICT (${conflictIdents}) DO UPDATE SET ${setClause} RETURNING *`,
+    values
+  };
+}
+function buildCount(table, where, validColumns) {
+  const whereFragment = buildWhere(where, validColumns, 1);
+  return {
+    text: `SELECT COUNT(*)::int AS count FROM ${table} ${whereFragment.text}`,
+    values: whereFragment.values
+  };
+}
+
 // dist/schema.js
 var CACHE_TTL_MS = 5 * 60 * 1e3;
 var cache = null;
-async function fetchTables(pool) {
-  const result = await pool.query(`SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-     ORDER BY table_name`);
-  return result.rows.map((r) => r.table_name);
+var schemas = ["public"];
+function setSchemas(next) {
+  schemas = next.length > 0 ? next : ["public"];
 }
-async function fetchColumns(pool, table) {
+function getSchemas() {
+  return schemas;
+}
+async function fetchTables(pool) {
+  const result = await pool.query(`SELECT table_schema, table_name FROM information_schema.tables
+     WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
+     ORDER BY table_schema, table_name`, [schemas]);
+  return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
+}
+async function fetchColumns(pool, schema, table) {
   const columnsResult = await pool.query(`SELECT column_name, data_type, is_nullable, column_default
      FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = $1
-     ORDER BY ordinal_position`, [table]);
+     WHERE table_schema = $1 AND table_name = $2
+     ORDER BY ordinal_position`, [schema, table]);
   const pkResult = await pool.query(`SELECT kcu.column_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'`, [table]);
+     WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'PRIMARY KEY'`, [schema, table]);
   const pkColumns = new Set(pkResult.rows.map((r) => r.column_name));
   return columnsResult.rows.map((row) => ({
     name: row.column_name,
@@ -16630,31 +16818,35 @@ async function fetchColumns(pool, table) {
     isPrimaryKey: pkColumns.has(row.column_name)
   }));
 }
-async function fetchForeignKeys(pool, table) {
+async function fetchForeignKeys(pool, schema, table) {
   const result = await pool.query(`SELECT
        kcu.column_name,
+       ccu.table_schema AS references_schema,
        ccu.table_name AS references_table,
-       ccu.column_name AS references_column
+       ccu.column_name AS references_column,
+       tc.constraint_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
      JOIN information_schema.constraint_column_usage ccu
        ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'`, [table]);
+     WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'FOREIGN KEY'`, [schema, table]);
   return result.rows.map((row) => ({
     column: row.column_name,
+    referencesSchema: row.references_schema,
     referencesTable: row.references_table,
-    referencesColumn: row.references_column
+    referencesColumn: row.references_column,
+    constraintName: row.constraint_name
   }));
 }
-async function fetchUniqueColumnSets(pool, table) {
+async function fetchUniqueColumnSets(pool, schema, table) {
   const result = await pool.query(`SELECT tc.constraint_name, kcu.column_name
      FROM information_schema.table_constraints tc
      JOIN information_schema.key_column_usage kcu
        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-     WHERE tc.table_schema = 'public' AND tc.table_name = $1
+     WHERE tc.table_schema = $1 AND tc.table_name = $2
        AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
-     ORDER BY tc.constraint_name, kcu.ordinal_position`, [table]);
+     ORDER BY tc.constraint_name, kcu.ordinal_position`, [schema, table]);
   const grouped = /* @__PURE__ */ new Map();
   for (const row of result.rows) {
     const existing = grouped.get(row.constraint_name) ?? [];
@@ -16664,15 +16856,26 @@ async function fetchUniqueColumnSets(pool, table) {
   return [...grouped.values()];
 }
 async function loadSchema(pool) {
-  const tableNames = await fetchTables(pool);
+  const tablesInfo = await fetchTables(pool);
   const tables = [];
-  for (const name of tableNames) {
-    const [columns, foreignKeys, uniqueColumnSets] = await Promise.all([
-      fetchColumns(pool, name),
-      fetchForeignKeys(pool, name),
-      fetchUniqueColumnSets(pool, name)
-    ]);
-    tables.push({ name, columns, foreignKeys, uniqueColumnSets });
+  for (const { schema, name } of tablesInfo) {
+    try {
+      const [columns, foreignKeys, uniqueColumnSets] = await Promise.all([
+        fetchColumns(pool, schema, name),
+        fetchForeignKeys(pool, schema, name),
+        fetchUniqueColumnSets(pool, schema, name)
+      ]);
+      tables.push({ schema, name, columns, foreignKeys, uniqueColumnSets });
+    } catch (err) {
+      tables.push({
+        schema,
+        name,
+        columns: [],
+        foreignKeys: [],
+        uniqueColumnSets: [],
+        loadError: err instanceof Error ? err.message : String(err)
+      });
+    }
   }
   return tables;
 }
@@ -16686,28 +16889,77 @@ async function getSchema(pool, forceRefresh = false) {
 }
 function invalidateSchemaCache() {
   cache = null;
+  countCache.clear();
+}
+var COUNT_CACHE_TTL_MS = 5 * 60 * 1e3;
+var countCache = /* @__PURE__ */ new Map();
+async function getOverviewRowCounts(pool, tables) {
+  const result = /* @__PURE__ */ new Map();
+  if (tables.length === 0)
+    return result;
+  const estimateResult = await pool.query(`SELECT n.nspname, c.relname, GREATEST(c.reltuples::bigint, 0) AS estimate
+     FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = ANY($1) AND c.relname = ANY($2)`, [schemas, tables.map((t) => t.name)]);
+  const estimates = new Map(estimateResult.rows.map((r) => [`${r.nspname}.${r.relname}`, Number(r.estimate)]));
+  await Promise.all(tables.map(async (t) => {
+    const key = `${t.schema}.${t.name}`;
+    const estimate = estimates.get(key) ?? 0;
+    if (estimate > 0) {
+      result.set(key, { count: estimate, exact: false });
+      return;
+    }
+    const cached = countCache.get(key);
+    if (cached && Date.now() - cached.at < COUNT_CACHE_TTL_MS) {
+      result.set(key, { count: cached.count, exact: cached.count !== null });
+      return;
+    }
+    let exact = null;
+    try {
+      const r = await pool.query(`SELECT COUNT(*)::int AS count FROM ${qualifiedTable(t.schema, t.name)}`);
+      exact = r.rows[0]?.count ?? 0;
+    } catch {
+      exact = null;
+    }
+    countCache.set(key, { count: exact, at: Date.now() });
+    result.set(key, { count: exact, exact: exact !== null });
+  }));
+  return result;
+}
+function assertLoadable(table) {
+  if (table.loadError) {
+    throw new Error(`Table "${tableDisplayName(table.schema, table.name)}" could not be fully introspected: ${table.loadError}`);
+  }
+  return table;
+}
+function tableDisplayName(schema, name) {
+  return schemas.length === 1 && schemas[0] === "public" ? name : `${schema}.${name}`;
 }
 async function resolveTableName(pool, input) {
   const tables = await getSchema(pool);
-  const exact = tables.find((t) => t.name === input);
-  if (exact)
-    return exact;
-  const lower = input.toLowerCase();
-  const matches = tables.filter((t) => t.name.toLowerCase() === lower);
-  const unique = matches.length === 1 ? matches[0] : void 0;
-  if (unique)
-    return unique;
-  if (matches.length > 1) {
-    throw new Error(`Table name "${input}" is ambiguous (${matches.map((t) => t.name).join(", ")}). Use the exact case.`);
+  const exactQualified = tables.filter((t) => `${t.schema}.${t.name}` === input);
+  if (exactQualified.length > 1) {
+    throw new Error(`Table name "${input}" is ambiguous (${exactQualified.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
   }
-  const suggestions = tables.filter((t) => t.name.toLowerCase().includes(lower)).slice(0, 3).map((t) => t.name);
+  const exact = exactQualified[0];
+  if (exact)
+    return assertLoadable(exact);
+  const lower = input.toLowerCase();
+  const matches = tables.filter((t) => t.name.toLowerCase() === lower || `${t.schema}.${t.name}`.toLowerCase() === lower);
+  const unique = matches[0];
+  if (unique && matches.length === 1)
+    return assertLoadable(unique);
+  if (matches.length > 1) {
+    throw new Error(`Table name "${input}" is ambiguous (${matches.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
+  }
+  const suggestions = tables.filter((t) => `${t.schema}.${t.name}`.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0, 3).map((t) => tableDisplayName(t.schema, t.name));
   const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
-  throw new Error(`Table "${input}" not found. Available: ${tables.map((t) => t.name).join(", ")}.${hint}`);
+  throw new Error(`Table "${input}" not found. Available: ${tables.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}.${hint}`);
 }
 function schemaToText(tables) {
   const lines = ["DATABASE SCHEMA", "===============", ""];
   for (const table of tables) {
-    lines.push(`[TABLE] ${table.name}`);
+    lines.push(`[TABLE] ${tableDisplayName(table.schema, table.name)}`);
     for (const col of table.columns) {
       const badges = [];
       if (col.isPrimaryKey)
@@ -16716,13 +16968,24 @@ function schemaToText(tables) {
         badges.push("required");
       const fk = table.foreignKeys.find((f) => f.column === col.name);
       if (fk)
-        badges.push(`-> ${fk.referencesTable}.${fk.referencesColumn}`);
+        badges.push(`-> ${referenceDisplay(fk)}`);
       const badge = badges.length ? ` [${badges.join(", ")}]` : "";
       lines.push(`  - ${col.name}: ${col.dataType}${badge}`);
     }
     lines.push("");
   }
   return lines.join("\n");
+}
+function referenceDisplay(fk) {
+  const table = schemas.length > 1 ? `${fk.referencesSchema}.${fk.referencesTable}` : fk.referencesTable;
+  return `${table}.${fk.referencesColumn}`;
+}
+function semanticRelationLabel(fk) {
+  const constraint = fk.constraintName ?? "";
+  if (constraint === "" || /_fkey$/i.test(constraint)) {
+    return `${fk.column} -> ${referenceDisplay(fk)}`;
+  }
+  return `${fk.column} -> ${referenceDisplay(fk)} [${constraint}]`;
 }
 function relationsToText(tables) {
   const lines = ["RELATIONSHIPS", "============", ""];
@@ -16731,9 +16994,9 @@ function relationsToText(tables) {
     if (table.foreignKeys.length === 0)
       continue;
     hasAny = true;
-    lines.push(table.name);
+    lines.push(tableDisplayName(table.schema, table.name));
     for (const fk of table.foreignKeys) {
-      lines.push(`  -> ${fk.column} -> ${fk.referencesTable}.${fk.referencesColumn}`);
+      lines.push(`  -> ${semanticRelationLabel(fk)}`);
     }
     lines.push("");
   }
@@ -16741,9 +17004,12 @@ function relationsToText(tables) {
 }
 async function getTableStats(pool, table) {
   const [sizeResult, countResult, indexResult] = await Promise.all([
-    pool.query(`SELECT pg_size_pretty(pg_total_relation_size($1::regclass)) AS size`, [`"${table.name}"`]),
-    pool.query(`SELECT reltuples::bigint AS estimate FROM pg_class WHERE relname = $1`, [table.name]),
-    pool.query(`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1`, [table.name])
+    pool.query(`SELECT pg_size_pretty(pg_total_relation_size($1::regclass)) AS size`, [`"${table.schema}"."${table.name}"`]),
+    pool.query(`SELECT GREATEST(c.reltuples::bigint, 0) AS estimate
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2`, [table.schema, table.name]),
+    pool.query(`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = ANY($1) AND tablename = $2`, [schemas, table.name])
   ]);
   const indexes = indexResult.rows.map((row) => {
     const colMatch = row.indexdef.match(/\(([^)]+)\)/);
@@ -16755,7 +17021,7 @@ async function getTableStats(pool, table) {
     };
   });
   return {
-    table: table.name,
+    table: tableDisplayName(table.schema, table.name),
     approxRowCount: Math.max(0, Number(countResult.rows[0]?.estimate ?? 0)),
     columns: table.columns,
     foreignKeys: table.foreignKeys,
@@ -16805,32 +17071,35 @@ function arrayElement(value) {
 function arrayLiteral(value) {
   return `{${value.map((v) => arrayElement(v)).join(",")}}`;
 }
-async function tableColumns(pool, table) {
+async function tableColumns(pool, schema, table) {
   const result = await pool.query(`SELECT a.attname AS name,
             a.attidentity AS identity
      FROM pg_attribute a
      JOIN pg_class c ON c.oid = a.attrelid
      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public'
-       AND c.relname = $1
+     WHERE n.nspname = $1
+       AND c.relname = $2
        AND a.attnum > 0
        AND NOT a.attisdropped
        AND a.attgenerated = ''
-     ORDER BY a.attnum`, [table]);
+     ORDER BY a.attnum`, [schema, table]);
   return result.rows;
 }
 async function listUserTables(pool) {
-  const result = await pool.query(`SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-     ORDER BY table_name`);
-  return result.rows.map((r) => r.table_name);
+  const result = await pool.query(`SELECT table_schema, table_name FROM information_schema.tables
+     WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
+     ORDER BY table_schema, table_name`, [getSchemas()]);
+  return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
 }
 async function buildSqlDataDump(pool, tables, options = {}) {
   const pageSize = options.pageSize ?? BATCH_SIZE;
-  const targetTables = tables ?? await listUserTables(pool);
+  const targetTables = tables ? await Promise.all(tables.map(async (t) => {
+    const resolved = await resolveTableName(pool, t);
+    return { schema: resolved.schema, name: resolved.name };
+  })) : await listUserTables(pool);
   const statements = [];
-  for (const table of targetTables) {
-    const columns = await tableColumns(pool, table);
+  for (const { schema, name: table } of targetTables) {
+    const columns = await tableColumns(pool, schema, table);
     if (columns.length === 0)
       continue;
     const colList = columns.map((c) => `"${c.name}"`).join(", ");
@@ -16838,13 +17107,13 @@ async function buildSqlDataDump(pool, tables, options = {}) {
     const override = hasAlwaysIdentity ? " OVERRIDING SYSTEM VALUE" : "";
     let offset = 0;
     for (; ; ) {
-      const result = await pool.query(`SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`, [pageSize, offset]);
+      const result = await pool.query(`SELECT * FROM ${qualifiedTable(schema, table)} ORDER BY 1 LIMIT $1 OFFSET $2`, [pageSize, offset]);
       const rows = result.rows;
       if (rows.length === 0)
         break;
       for (const row of rows) {
         const values = columns.map((c) => row[c.name] === void 0 ? "NULL" : sqlLiteral(row[c.name])).join(", ");
-        statements.push(`INSERT INTO "${table}"${override} (${colList}) VALUES (${values});`);
+        statements.push(`INSERT INTO ${qualifiedTable(schema, table)}${override} (${colList}) VALUES (${values});`);
       }
       if (rows.length < pageSize)
         break;
@@ -16852,7 +17121,7 @@ async function buildSqlDataDump(pool, tables, options = {}) {
     }
     const identityColumns = columns.filter((c) => c.identity === "a" || c.identity === "d");
     for (const column of identityColumns) {
-      statements.push(`SELECT setval(pg_get_serial_sequence('"${table}"', '${column.name}'), (SELECT COALESCE(MAX("${column.name}"), 1) FROM "${table}"));`);
+      statements.push(`SELECT setval(pg_get_serial_sequence('"${schema}"."${table}"', '${column.name}'), (SELECT COALESCE(MAX("${column.name}"), 1) FROM ${qualifiedTable(schema, table)}));`);
     }
   }
   return statements.join("\n");
@@ -16969,172 +17238,6 @@ function stripSqlStrings(sql) {
     i++;
   }
   return result;
-}
-
-// dist/sqlBuilder.js
-var IDENT_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-function quoteIdent(name) {
-  if (!IDENT_PATTERN.test(name)) {
-    throw new Error(`Invalid identifier: "${name}"`);
-  }
-  return `"${name}"`;
-}
-function assertKnownColumn(column, validColumns) {
-  if (!validColumns.has(column)) {
-    throw new Error(`Unknown column "${column}". Available columns: ${[...validColumns].join(", ")}`);
-  }
-}
-var OPERATORS = {
-  equals: "=",
-  not: "!=",
-  gt: ">",
-  gte: ">=",
-  lt: "<",
-  lte: "<="
-};
-function buildWhere(where, validColumns, paramOffset) {
-  if (!where || Object.keys(where).length === 0) {
-    return { text: "", values: [] };
-  }
-  const clauses = [];
-  const values = [];
-  let paramIndex = paramOffset;
-  for (const [column, rawValue] of Object.entries(where)) {
-    assertKnownColumn(column, validColumns);
-    const ident = quoteIdent(column);
-    if (rawValue === null) {
-      clauses.push(`${ident} IS NULL`);
-      continue;
-    }
-    if (rawValue !== null && typeof rawValue === "object" && !Array.isArray(rawValue)) {
-      const condObj = rawValue;
-      for (const [op, opValue] of Object.entries(condObj)) {
-        if (op === "in" || op === "notIn") {
-          if (!Array.isArray(opValue) || opValue.length === 0) {
-            throw new Error(`"${op}" for column "${column}" requires a non-empty array`);
-          }
-          const placeholders = opValue.map(() => `$${paramIndex++}`).join(", ");
-          clauses.push(`${ident} ${op === "in" ? "IN" : "NOT IN"} (${placeholders})`);
-          values.push(...opValue);
-        } else if (op === "contains" || op === "startsWith" || op === "endsWith") {
-          const pattern = op === "contains" ? `%${opValue}%` : op === "startsWith" ? `${opValue}%` : `%${opValue}`;
-          clauses.push(`${ident} ILIKE $${paramIndex++}`);
-          values.push(pattern);
-        } else if (op in OPERATORS) {
-          clauses.push(`${ident} ${OPERATORS[op]} $${paramIndex++}`);
-          values.push(opValue);
-        } else {
-          throw new Error(`Unsupported filter operator "${op}" for column "${column}"`);
-        }
-      }
-      continue;
-    }
-    clauses.push(`${ident} = $${paramIndex++}`);
-    values.push(rawValue);
-  }
-  return { text: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", values };
-}
-function buildOrderBy(orderBy, validColumns) {
-  if (!orderBy || Object.keys(orderBy).length === 0)
-    return "";
-  const parts = [];
-  for (const [column, direction] of Object.entries(orderBy)) {
-    assertKnownColumn(column, validColumns);
-    if (typeof direction !== "string") {
-      throw new Error(`Invalid sort direction for column "${column}".`);
-    }
-    const norm = direction.toLowerCase();
-    let order = "ASC";
-    let nulls = "";
-    if (norm === "desc")
-      order = "DESC";
-    else if (norm === "asc_nulls_last")
-      nulls = " NULLS LAST";
-    else if (norm === "desc_nulls_first") {
-      order = "DESC";
-      nulls = " NULLS FIRST";
-    } else if (norm !== "asc") {
-      throw new Error(`Invalid sort direction "${direction}" for column "${column}". Use "asc", "desc", "asc_nulls_last", or "desc_nulls_first".`);
-    }
-    parts.push(`${quoteIdent(column)} ${order}${nulls}`);
-  }
-  return parts.length ? `ORDER BY ${parts.join(", ")}` : "";
-}
-function buildSelectColumns(select, validColumns) {
-  if (!select || select.length === 0)
-    return "*";
-  return select.map((c) => {
-    assertKnownColumn(c, validColumns);
-    return quoteIdent(c);
-  }).join(", ");
-}
-function buildInsert(table, data, validColumns) {
-  const columns = Object.keys(data);
-  if (columns.length === 0)
-    throw new Error("No fields provided to insert");
-  columns.forEach((c) => assertKnownColumn(c, validColumns));
-  const idents = columns.map((c) => quoteIdent(c)).join(", ");
-  const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
-  const values = columns.map((c) => data[c]);
-  return {
-    text: `INSERT INTO ${quoteIdent(table)} (${idents}) VALUES (${placeholders}) RETURNING *`,
-    values
-  };
-}
-function buildUpdate(table, data, where, validColumns) {
-  const columns = Object.keys(data);
-  if (columns.length === 0)
-    throw new Error("No fields provided to update");
-  columns.forEach((c) => assertKnownColumn(c, validColumns));
-  const setClauses = columns.map((c, i) => `${quoteIdent(c)} = $${i + 1}`).join(", ");
-  const values = columns.map((c) => data[c]);
-  const whereFragment = buildWhere(where, validColumns, values.length + 1);
-  values.push(...whereFragment.values);
-  return {
-    text: `UPDATE ${quoteIdent(table)} SET ${setClauses} ${whereFragment.text} RETURNING *`,
-    values
-  };
-}
-function buildDelete(table, where, validColumns) {
-  const whereFragment = buildWhere(where, validColumns, 1);
-  return {
-    text: `DELETE FROM ${quoteIdent(table)} ${whereFragment.text} RETURNING *`,
-    values: whereFragment.values
-  };
-}
-function buildUpsert(table, insertData, updateData, conflictColumns, validColumns) {
-  const insertColumns = Object.keys(insertData);
-  if (insertColumns.length === 0)
-    throw new Error("No fields provided to insert");
-  insertColumns.forEach((c) => assertKnownColumn(c, validColumns));
-  const insertIdents = insertColumns.map((c) => quoteIdent(c)).join(", ");
-  const insertPlaceholders = insertColumns.map((_, i) => `$${i + 1}`).join(", ");
-  const values = insertColumns.map((c) => insertData[c]);
-  const conflictIdents = conflictColumns.map((c) => quoteIdent(c)).join(", ");
-  const updateColumns = Object.keys(updateData).filter((c) => !conflictColumns.includes(c));
-  let setClause;
-  if (updateColumns.length === 0) {
-    setClause = conflictColumns.map((c) => `${quoteIdent(c)} = ${quoteIdent(c)}`).join(", ");
-  } else {
-    updateColumns.forEach((c) => assertKnownColumn(c, validColumns));
-    const parts = [];
-    for (const c of updateColumns) {
-      values.push(updateData[c]);
-      parts.push(`${quoteIdent(c)} = $${values.length}`);
-    }
-    setClause = parts.join(", ");
-  }
-  return {
-    text: `INSERT INTO ${quoteIdent(table)} (${insertIdents}) VALUES (${insertPlaceholders}) ON CONFLICT (${conflictIdents}) DO UPDATE SET ${setClause} RETURNING *`,
-    values
-  };
-}
-function buildCount(table, where, validColumns) {
-  const whereFragment = buildWhere(where, validColumns, 1);
-  return {
-    text: `SELECT COUNT(*)::int AS count FROM ${quoteIdent(table)} ${whereFragment.text}`,
-    values: whereFragment.values
-  };
 }
 
 // dist/toolHandlers.js
@@ -17267,6 +17370,7 @@ function textResponse(data) {
   };
 }
 function createHandlers(pool, safety, config) {
+  setSchemas(config.schemas);
   const startTime = Date.now();
   let requestCount = 0;
   let lastSuccessAt = null;
@@ -17282,22 +17386,30 @@ function createHandlers(pool, safety, config) {
     db_overview: async () => {
       const t0 = Date.now();
       const tables = await getSchema(pool);
-      const names = tables.map((t) => t.name);
-      const estimateResult = names.length ? await pool.query(`SELECT relname, GREATEST(reltuples::bigint, 0) AS estimate FROM pg_class WHERE relname = ANY($1)`, [names]) : { rows: [] };
-      const estimates = new Map(estimateResult.rows.map((r) => [r.relname, Number(r.estimate)]));
-      const totalRows = [...estimates.values()].reduce((sum, n) => sum + n, 0);
+      const counts = await getOverviewRowCounts(pool, tables);
+      let total = 0;
+      const tableLines = tables.map((t) => {
+        const key = `${t.schema}.${t.name}`;
+        const row = counts.get(key);
+        const label = row?.exact ? `${row.count.toLocaleString().padStart(9)} rows` : row && row.count !== null ? `~${row.count.toLocaleString().padStart(8)} rows (estimate)` : `        ? rows (count unavailable)`;
+        if (row && row.count !== null)
+          total += row.count;
+        const err = t.loadError ? `  (Error: ${t.loadError})` : "";
+        return `  ${tableDisplayName(t.schema, t.name).padEnd(28)} ${label}${err}`;
+      });
       const lines = [
         "PostgreSQL Database Overview",
         "",
         `Mode: ${safety.mode} | ${safety.readonly ? "READ-ONLY" : "Read-Write"}`,
         "",
-        `TABLES (${tables.length}, ~${totalRows.toLocaleString()} rows total, estimates)`,
-        ...tables.map((t) => `  ${t.name.padEnd(28)} ~${String(estimates.get(t.name) ?? 0).padStart(8)} rows`),
+        `TABLES (${tables.length}, ~${total.toLocaleString()} rows total)`,
+        ...tableLines,
         "",
         relationsToText(tables),
         "SAFETY",
         `  Sensitive columns redacted: ${[...safety.sensitiveColumns].join(", ")}`,
         `  Blocked tables: ${safety.blockedTables.size ? [...safety.blockedTables].join(", ") : "none"}`,
+        `  High-risk tables: ${safety.highRiskTables.size ? [...safety.highRiskTables].join(", ") : "none"}`,
         "",
         "Use db_schema for full column detail, db_table_info for exact counts and indexes on one table."
       ];
@@ -17367,8 +17479,8 @@ function createHandlers(pool, safety, config) {
       const columns = buildSelectColumns(select, validColumns);
       const whereFragment = buildWhere(where, validColumns, 1);
       const orderClause = buildOrderBy(orderBy, validColumns);
-      const sql = `SELECT ${columns} FROM ${quoteIdent(table.name)} ${whereFragment.text} ${orderClause} LIMIT ${take} OFFSET ${skip}`;
-      const countFragment = buildCount(table.name, where, validColumns);
+      const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} ${orderClause} LIMIT ${take} OFFSET ${skip}`;
+      const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const [rowsResult, countResult] = await Promise.all([
         pool.query(sql, whereFragment.values),
         pool.query(countFragment.text, countFragment.values)
@@ -17376,7 +17488,7 @@ function createHandlers(pool, safety, config) {
       const total = countResult.rows[0]?.count ?? 0;
       logRequest("db_find_many", Date.now() - t0);
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         count: rowsResult.rows.length,
         total,
         page: skip > 0 ? Math.floor(skip / take) + 1 : 1,
@@ -17393,7 +17505,7 @@ function createHandlers(pool, safety, config) {
       const select = parseJsonArray(args.select, "select");
       const columns = buildSelectColumns(select, validColumns);
       const whereFragment = buildWhere(where, validColumns, 1);
-      const sql = `SELECT ${columns} FROM ${quoteIdent(table.name)} ${whereFragment.text} LIMIT 1`;
+      const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} LIMIT 1`;
       const result = await pool.query(sql, whereFragment.values);
       logRequest("db_find_first", Date.now() - t0);
       return textResponse(result.rows[0] ? redactRow(result.rows[0], safety) : null);
@@ -17403,11 +17515,11 @@ function createHandlers(pool, safety, config) {
       const table = await resolveTableName(pool, args.table);
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
-      const fragment = buildCount(table.name, where, validColumns);
+      const fragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const result = await pool.query(fragment.text, fragment.values);
       logRequest("db_count", Date.now() - t0);
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         count: result.rows[0]?.count ?? 0
       });
     },
@@ -17462,11 +17574,11 @@ function createHandlers(pool, safety, config) {
       }
       const take = Math.min(toNonNegativeInt(args.take, 50), MAX_TAKE);
       const groupClause = groupCols.map((c) => quoteIdent(c)).join(", ");
-      const sql = `SELECT ${selectExprs.join(", ")} FROM ${quoteIdent(table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
+      const sql = `SELECT ${selectExprs.join(", ")} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
       const result = await pool.query(sql, whereFragment.values);
       logRequest("db_aggregate", Date.now() - t0);
       return textResponse({
-        table: table.name,
+        table: tableDisplayName(table.schema, table.name),
         groupBy: groupCols,
         count: result.rows.length,
         data: redactAggregateRows(result.rows, safety, groupCols, aggregates)
@@ -17508,6 +17620,8 @@ function createHandlers(pool, safety, config) {
         if (limitValue > MAX_RAW_TAKE) {
           throw new Error(`LIMIT value (${limitValue}) exceeds maximum allowed (${MAX_RAW_TAKE}). Use a smaller limit or paginate.`);
         }
+      } else if (safety.readonly) {
+        throw new Error("Raw write statements are blocked while the server is read-only (--readonly).");
       } else if (!args.confirmed) {
         throw new Error("Only SELECT queries are allowed via db_raw_query. A non-SELECT statement requires explicit user confirmation (confirmed: true) and a server with ALLOW_RAW_WRITES enabled.");
       } else if (!config.allowRawWrites) {
@@ -17547,6 +17661,7 @@ function createHandlers(pool, safety, config) {
       const access = checkWriteAccess(table.name, "create", safety);
       if (access.blocked)
         throw new Error(access.message);
+      const warnings = access.warning ? [access.warning] : [];
       const data = parseJsonObject(args.data, "data");
       if (!data)
         throw new Error("data parameter is required");
@@ -17554,20 +17669,22 @@ function createHandlers(pool, safety, config) {
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldCreate: cleaned,
           ...stripped.length > 0 && { strippedFields: stripped },
+          ...warnings.length > 0 && { warnings },
           message: "DRY RUN -- nothing was created."
         });
       }
       const validColumns = columnSet(table);
-      const fragment = buildInsert(table.name, cleaned, validColumns);
+      const fragment = buildInsert(qualifiedTable(table.schema, table.name), cleaned, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
           created: redactRow(result.rows[0], safety),
-          ...stripped.length > 0 && { strippedFields: stripped }
+          ...stripped.length > 0 && { strippedFields: stripped },
+          ...warnings.length > 0 && { warnings }
         });
       } catch (err) {
         throw new Error(decodePgError(err, safety.mode));
@@ -17578,6 +17695,7 @@ function createHandlers(pool, safety, config) {
       const access = checkWriteAccess(table.name, "upsert", safety);
       if (access.blocked)
         throw new Error(access.message);
+      const warnings = access.warning ? [access.warning] : [];
       const where = parseJsonObject(args.where, "where");
       if (!where)
         throw new Error("where parameter is required for upsert");
@@ -17592,7 +17710,7 @@ function createHandlers(pool, safety, config) {
       });
       if (!matched) {
         const available = table.uniqueColumnSets.map((s) => s.join("+")).join(", ") || "none";
-        throw new Error(`where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${table.name}". Available: ${available}`);
+        throw new Error(`where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(table.schema, table.name)}". Available: ${available}`);
       }
       const fullInsert = { ...where, ...createData };
       const { cleaned: cleanedInsert, stripped: strippedInsert } = sanitizeWriteData(fullInsert, safety);
@@ -17601,21 +17719,23 @@ function createHandlers(pool, safety, config) {
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldInsert: cleanedInsert,
           wouldUpdate: cleanedUpdate,
           ...stripped.length > 0 && { strippedFields: stripped },
+          ...warnings.length > 0 && { warnings },
           message: "DRY RUN -- nothing was upserted."
         });
       }
       const validColumns = columnSet(table);
-      const fragment = buildUpsert(table.name, cleanedInsert, cleanedUpdate, matched, validColumns);
+      const fragment = buildUpsert(qualifiedTable(table.schema, table.name), cleanedInsert, cleanedUpdate, matched, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
           upserted: redactRow(result.rows[0], safety),
-          ...stripped.length > 0 && { strippedFields: stripped }
+          ...stripped.length > 0 && { strippedFields: stripped },
+          ...warnings.length > 0 && { warnings }
         });
       } catch (err) {
         throw new Error(decodePgError(err, safety.mode));
@@ -17632,7 +17752,7 @@ function createHandlers(pool, safety, config) {
         throw new Error("data parameter is required");
       const { cleaned, stripped } = sanitizeWriteData(data, safety);
       const validColumns = columnSet(table);
-      const countFragment = buildCount(table.name, where, validColumns);
+      const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const countResult = await pool.query(countFragment.text, countFragment.values);
       const matched = countResult.rows[0]?.count ?? 0;
       const bw = bulkWarning(matched, "update");
@@ -17640,7 +17760,7 @@ function createHandlers(pool, safety, config) {
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           matched,
           wouldSet: cleaned,
           ...stripped.length > 0 && { strippedFields: stripped },
@@ -17653,12 +17773,12 @@ function createHandlers(pool, safety, config) {
           throw new Error("Refusing to update ALL rows. Pass confirmAll: true, or use a specific where filter.");
         }
       }
-      const fragment = buildUpdate(table.name, cleaned, where, validColumns);
+      const fragment = buildUpdate(qualifiedTable(table.schema, table.name), cleaned, where, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           matched: result.rowCount ?? 0,
           ...stripped.length > 0 && { strippedFields: stripped },
           ...warnings.length > 0 && { warnings },
@@ -17675,7 +17795,7 @@ function createHandlers(pool, safety, config) {
         throw new Error(access.message);
       const where = parseJsonObject(args.where, "where");
       const validColumns = columnSet(table);
-      const countFragment = buildCount(table.name, where, validColumns);
+      const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const countResult = await pool.query(countFragment.text, countFragment.values);
       const matched = countResult.rows[0]?.count ?? 0;
       const bw = bulkWarning(matched, "delete");
@@ -17683,7 +17803,7 @@ function createHandlers(pool, safety, config) {
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           wouldDelete: matched,
           ...warnings.length > 0 && { warnings },
           message: `DRY RUN -- ${matched} row(s) would be deleted.`
@@ -17694,12 +17814,12 @@ function createHandlers(pool, safety, config) {
           throw new Error("Refusing to delete ALL rows. Pass confirmAll: true, or use a specific where filter.");
         }
       }
-      const fragment = buildDelete(table.name, where, validColumns);
+      const fragment = buildDelete(qualifiedTable(table.schema, table.name), where, validColumns);
       try {
         const result = await pool.query(fragment.text, fragment.values);
         invalidateSchemaCache();
         return textResponse({
-          table: table.name,
+          table: tableDisplayName(table.schema, table.name),
           deleted: result.rowCount ?? 0,
           ...warnings.length > 0 && { warnings },
           message: `${result.rowCount ?? 0} row(s) deleted.`
@@ -17853,7 +17973,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.0.1"
+    version: "2.1.0"
   });
   let config = null;
   let configError = null;
@@ -17883,7 +18003,7 @@ async function main() {
     process.exit(1);
   }
   const pool = createPool(config.poolConfig);
-  const safety = buildSafetyState(config.readonly, config.mode, config.blockedTables, config.extraSensitiveColumns);
+  const safety = buildSafetyState(config.readonly, config.mode, config.blockedTables, config.extraSensitiveColumns, config.highRiskTables);
   try {
     await waitForConnection(pool, 5, 2e3);
     log.info(`Connected to ${connectionSummary(config.poolConfig)}`);
@@ -17911,7 +18031,7 @@ async function main() {
   registerTools(server, { ...untypedHandlers, mcp_status: statusHandler });
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v1.0.0 ready");
+  log.info("PGAutoPilot v2.1.0 ready");
   log.info(`Connection: ${connectionSummary(config.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {
