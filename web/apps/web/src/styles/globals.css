@@ -1,0 +1,261 @@
+@import "tailwindcss";
+@import "@pgautopilot/ui/styles.css";
+
+@font-face {
+  font-family: "AlanSans";
+  src: url("/fonts/AlanSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "AlanSans";
+  src: url("/fonts/AlanSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "AlanSans";
+  src: url("/fonts/AlanSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "AlanSans";
+  src: url("/fonts/AlanSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/Rubik-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/Rubik-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/Rubik-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/Rubik-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-pg-bg: #f5f5f5;
+  --color-pg-surface: #ffffff;
+  --color-pg-surface-2: #f8fafc;
+  --color-pg-border: #e2e8f0;
+  --color-pg-border-strong: #cbd5e1;
+  --color-pg-text: #0f172a;
+  --color-pg-muted: #475569;
+  --color-pg-dim: #94a3b8;
+  --color-pg-primary: #2490ef;
+  --color-pg-primary-hover: #1a7fd9;
+  --color-pg-primary-light: rgba(36, 144, 239, 0.1);
+  --color-pg-accent: #16a34a;
+  --color-pg-accent-light: rgba(22, 163, 74, 0.12);
+  --color-pg-danger: #dc2626;
+  --color-pg-danger-light: rgba(220, 38, 38, 0.08);
+  --color-pg-warning: #d97706;
+  --font-pg-sans: "Rubik", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-pg-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --shadow-pg-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-pg-md: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+  --ease-pg-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --animate-spin: spin 1.5s linear infinite;
+}
+
+[data-theme="dark"] {
+  --color-pg-bg: #0b1220;
+  --color-pg-surface: #111827;
+  --color-pg-surface-2: #1f2937;
+  --color-pg-border: #243244;
+  --color-pg-border-strong: #374151;
+  --color-pg-text: #f1f5f9;
+  --color-pg-muted: #94a3b8;
+  --color-pg-dim: #64748b;
+  --color-pg-primary: #3b9df0;
+  --color-pg-primary-hover: #5fb0f3;
+  --color-pg-primary-light: rgba(59, 157, 240, 0.16);
+  --color-pg-accent: #34d399;
+  --color-pg-accent-light: rgba(52, 211, 153, 0.16);
+  --color-pg-danger: #f87171;
+  --color-pg-danger-light: rgba(248, 113, 113, 0.14);
+  --color-pg-warning: #fbbf24;
+}
+
+.tok-key {
+  color: var(--color-pg-primary);
+  font-weight: 600;
+}
+
+.tok-str {
+  color: var(--color-pg-accent);
+}
+
+.tok-num {
+  color: #b45309;
+}
+
+.tok-com {
+  color: var(--color-pg-dim);
+  font-style: italic;
+}
+
+.tok-fn {
+  color: #0d9488;
+}
+
+.tok-bool {
+  color: #7c3aed;
+}
+
+[data-theme="dark"] .tok-num {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .tok-fn {
+  color: #2dd4bf;
+}
+
+[data-theme="dark"] .tok-bool {
+  color: #a78bfa;
+}
+
+@source "../../../../packages/ui/src";
+
+::selection {
+  background: rgba(36, 144, 239, 0.3);
+  background: color-mix(in srgb, var(--color-pg-primary) 30%, transparent);
+}
+
+@layer base {
+  body {
+    margin: 0;
+    height: 100vh;
+    @apply bg-pg-bg font-pg-sans text-pg-text antialiased;
+  }
+
+  #root {
+    height: 100vh;
+  }
+}
+
+@keyframes pg-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.pg-caret {
+  animation: pg-caret-blink 1.1s ease-in-out infinite;
+  transition: transform 0.18s cubic-bezier(0.25, 1.08, 0.35, 1);
+  will-change: transform;
+}
+
+@keyframes pg-notice-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% / var(--marquee-copies, 2)));
+  }
+}
+
+@layer utilities {
+  .pg-notice-marquee {
+    animation: pg-notice-marquee 50s linear infinite;
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pg-notice-marquee {
+      animation: none;
+    }
+  }
+}
+
+::view-transition-group(root) {
+  animation-duration: 0s;
+}
+
+::view-transition-old(root) {
+  animation: pg-theme-out 300ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: pg-theme-in 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform;
+}
+
+@keyframes pg-theme-in {
+  from {
+    opacity: 0;
+    transform: scale(1.004);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pg-theme-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.996);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

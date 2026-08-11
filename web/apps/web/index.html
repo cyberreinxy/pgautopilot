@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="PGAutoPilot Dashboard — a safe way to inspect and manage your PostgreSQL database with the SQL editor, tables, schema, migrations, snapshots and logs." />
+  <meta name="theme-color" content="#1e1f2e" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/Rubik-Regular.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/Rubik-Medium.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/Rubik-SemiBold.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/Rubik-Bold.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/AlanSans-Regular.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/JetBrainsMono-Regular.woff2" />
+  <title>PGAutoPilot Dashboard</title>
+  <script>
+    try {
+      var t = localStorage.getItem("pgautopilot-theme");
+      if (t !== "dark" && t !== "light") {
+        t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", t);
+    } catch (e) { }
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

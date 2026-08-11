@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+data/
+scripts/
+*.log
+*.bak
+.env*
+!.env.example
+package-lock.json
+Dockerfile
+docker-compose.yml

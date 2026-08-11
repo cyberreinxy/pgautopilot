@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "pgautopilot": {
+            "command": "npx",
+            "args": [
+                "tsx",
+                "src/index.ts"
+            ],
+            "cwd": "${workspaceFolder}/server"
+        }
+    }
+}

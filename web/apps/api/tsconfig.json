@@ -1,0 +1,7 @@
+{
+  "extends": "@pgautopilot/config/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}

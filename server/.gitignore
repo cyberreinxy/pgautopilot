@@ -1,0 +1,9 @@
+node_modules
+dist/*
+!dist/pgautopilot.bundle.cjs
+.env
+backups
+.temp/
+*.log
+docs/
+data/

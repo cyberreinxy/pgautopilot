@@ -1,0 +1,34 @@
+{
+  "name": "@pgautopilot/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --include ../../.env* src/index.ts",
+    "build": "node scripts/bundle.mjs",
+    "start": "node dist/index.cjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pgautopilot/contracts": "workspace:*",
+    "@pgautopilot/core": "workspace:*",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.6.1",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@pgautopilot/config": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/supertest": "^7.2.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.22.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

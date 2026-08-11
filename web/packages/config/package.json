@@ -1,0 +1,14 @@
+{
+  "name": "@pgautopilot/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint/index.js",
+    "./tsconfig/*.json": "./tsconfig/*.json"
+  },
+  "files": [
+    "eslint",
+    "tsconfig"
+  ]
+}

@@ -1,0 +1,14 @@
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+coverage
+data/
+.turbo
+snapshots
+.DS_Store
+graphify-out
+*.log
+.opencode/
