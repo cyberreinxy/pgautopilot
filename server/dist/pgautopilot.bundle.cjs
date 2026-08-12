@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.1.1 — self-contained, no npm needed
+// PGAutoPilot v2.1.2 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;
@@ -37292,7 +37292,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.1.1"
+    version: "2.1.2"
   });
   let config2 = null;
   let configError = null;
@@ -37350,7 +37350,7 @@ async function main() {
   registerTools(server, { ...untypedHandlers, mcp_status: statusHandler });
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.1.1 ready");
+  log.info("PGAutoPilot v2.1.2 ready");
   log.info(`Connection: ${connectionSummary(config2.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {

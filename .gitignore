@@ -1,1 +1,3 @@
-.github/
+.github/*
+!.github/workflows/
+!.github/dependabot.yml

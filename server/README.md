@@ -1,6 +1,6 @@
 # PGAutoPilot
 
-![PGAutoPilot](assets/banner.svg)
+![PGAutoPilot](https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/server/assets/banner.svg)
 
 [![MIT License](https://img.shields.io/badge/MIT_License-111111?style=for-the-badge&logo=opensourceinitiative&logoColor=33FF99)](LICENSE)
 [![Node.js 18+](https://img.shields.io/badge/Node_18+-111111?style=for-the-badge&logo=nodedotjs&logoColor=33FF99)](package.json)

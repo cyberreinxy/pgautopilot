@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2 (2026-08-12)
+
+- **Security:** fix the npm package banner path so the README image resolves correctly.
+- Chore: add `npm run security` audit gate, `SECURITY.md`, CI workflow, and Dependabot updates.
+
 ## 2.1.1 (2026-08-12)
 
 - **Security:** bump `@modelcontextprotocol/sdk` to `^1.30.0` to fix three known advisories in the bundled runtime (instance-reuse data leak, DNS rebinding, ReDoS).
@@ -8,7 +13,7 @@
 ## 2.1.0 (2026-08-11)
 
 - **Security:** `db_raw_query` writes are blocked in read-only mode (`--readonly`), even with `ALLOW_RAW_WRITES=true`.
-- **Security:** new `HIGH_RISK_TABLES` env var — warn-but-allow writes with a `[HIGH-RISK]` warning.
+- **Security:** new `HIGH_RISK_TABLES` env var - warn-but-allow writes with a `[HIGH-RISK]` warning.
 - Added: `PG_SCHEMAS` env var (default `public`) to introspect non-`public` schemas; tables are schema-qualified in multi-schema setups.
 - Improved: `db_overview` hybrid row counts (`reltuples` estimate → exact `COUNT(*)` fallback).
 - Improved: per-table error isolation in schema introspection; descriptive FK constraint names in relationship output.
@@ -19,7 +24,7 @@
 
 ## 2.0.0 (2026-08-11)
 
-- Breaking: redesigned MCP server — tool names, input schemas, and behavior changed from v1.0.0; update MCP client configs.
+- Breaking: redesigned MCP server - tool names, input schemas, and behavior changed from v1.0.0; update MCP client configs.
 - Breaking: restructured config and environment variable handling.
 - Rebuilt safety model: redaction, blocked tables, read-only guards.
 - Added: schema-aware validation, model-agnostic design, single-executable bundle (`npx pgautopilot`), Docker support.

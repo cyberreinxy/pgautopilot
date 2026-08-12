@@ -1,6 +1,6 @@
 {
   "name": "pgautopilot",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "type": "module",
   "description": "PGAutoPilot — an MCP server that lets AI assistants safely explore, query, and manage any PostgreSQL database. Zero setup, auto-discovery, production-safe.",
   "main": "dist/index.js",
@@ -16,6 +16,7 @@
     "sign:gpg": "node scripts/sign.mjs --gpg",
     "verify": "node scripts/verify.mjs",
     "verify:gpg": "node scripts/verify.mjs --gpg",
+    "security": "npm audit --omit=dev --audit-level=high",
     "start": "node dist/index.js",
     "start:bundle": "node dist/pgautopilot.bundle.cjs",
     "dev": "tsx src/index.ts",
@@ -54,6 +55,7 @@
     "type": "git",
     "url": "https://github.com/cyberreinxy/pgautopilot"
   },
+  "banner": "server/assets/banner.svg",
   "homepage": "https://github.com/cyberreinxy/pgautopilot#readme",
   "bugs": {
     "url": "https://github.com/cyberreinxy/pgautopilot/issues"
