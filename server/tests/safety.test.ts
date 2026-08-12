@@ -43,6 +43,14 @@ describe("redactRow", () => {
     const row = redactRow({ session: { token: "x", sub: 1 } }, writableSafety());
     expect(row.session).toEqual({ token: "***REDACTED***", sub: 1 });
   });
+
+  it("serializes Date values instead of collapsing them to {}", () => {
+    const date = new Date("2026-08-12T00:00:00.000Z");
+    expect(redactRow({ id: 1, created_at: date }, writableSafety())).toEqual({
+      id: 1,
+      created_at: "2026-08-12T00:00:00.000Z",
+    });
+  });
 });
 
 describe("redactRows", () => {

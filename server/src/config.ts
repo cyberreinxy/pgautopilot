@@ -96,6 +96,7 @@ export interface AppConfig {
   statementTimeoutMs: number;
   allowRawWrites: boolean;
   schemas: string[];
+  disabledTools: Set<string>;
 }
 
 function isLocalHost(host: string): boolean {
@@ -154,6 +155,10 @@ function parseSchemas(value: string | undefined): string[] {
   return schemas.length > 0 ? schemas : ["public"];
 }
 
+export function resolveReadonly(argv: string[], allowWrites: string | undefined): boolean {
+  return argv.includes("--readonly") || allowWrites !== "true";
+}
+
 export function loadConfig(argv: string[]): AppConfig {
   const envFile = loadDotEnv();
   const resolveDb = detectDatabaseUrlConflict(envFile, process.env);
@@ -180,7 +185,7 @@ export function loadConfig(argv: string[]): AppConfig {
     );
   }
 
-  const readonly = argv.includes("--readonly");
+  const readonly = resolveReadonly(argv, process.env.ALLOW_WRITES);
   const modeArg = argv.find((a) => a.startsWith("--mode="));
   const mode =
     (modeArg?.split("=")[1] as "development" | "production" | undefined) ??
@@ -214,6 +219,7 @@ export function loadConfig(argv: string[]): AppConfig {
     statementTimeoutMs: finalTimeoutMs,
     allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
     schemas: parseSchemas(process.env.PG_SCHEMAS),
+    disabledTools: parseList(process.env.DISABLED_TOOLS),
   };
 }
 

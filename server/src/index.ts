@@ -36,8 +36,13 @@ function configErrorResult(detail: string): ToolResult {
 function registerTools(
   server: McpServer,
   handlers: Record<string, (args: unknown) => Promise<ToolResult>>,
+  disabledTools: Set<string>,
 ) {
   for (const [name, def] of Object.entries(toolDefinitions)) {
+    if (disabledTools.has(name)) {
+      log.warn(`Tool "${name}" is disabled via DISABLED_TOOLS.`);
+      continue;
+    }
     const handler = handlers[name];
     const wrapped = async (args: unknown): Promise<ToolResult> => {
       if (!handler) {
@@ -75,7 +80,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.1.2",
+    version: "2.1.3",
   });
 
   let config: ReturnType<typeof loadConfig> | null = null;
@@ -101,7 +106,7 @@ async function main() {
         },
       ],
     });
-    registerTools(server, { mcp_status: statusHandler });
+    registerTools(server, { mcp_status: statusHandler }, new Set<string>());
     const transport = new StdioServerTransport();
     await server.connect(transport);
     log.warn(
@@ -154,11 +159,11 @@ async function main() {
       },
     ],
   });
-  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler });
+  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, config.disabledTools);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.1.2 ready");
+  log.info("PGAutoPilot v2.1.3 ready");
   log.info(`Connection: ${connectionSummary(config.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {

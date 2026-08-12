@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.3 (2026-08-12)
+
+**Security patch** — resolves the open items from the v2.1.1 security review.
+
+- **Security:** read-only is now the default. Write tools require `ALLOW_WRITES=true` in both entry points; `--readonly` still forces read-only even then.
+- **Security:** new `DISABLED_TOOLS` env var (comma-separated tool names) gate individual write/raw tools per-server — read tools stay available.
+- **Security:** postinstall no longer skips existing editor configs — it merges the `pgautopilot` entry into `.cursor/mcp.json`, `.vscode/mcp.json`, and `.codeium/windsurf/mcp_config.json`, and adds Claude Desktop support (`.claude/mcp.json` + `claude_desktop_config.json`).
+- Fixed: `Date` values were serialized as `{}` in `find_many` / `find_first` output; now rendered as ISO-8601 strings. `Buffer`/bytea values now render as hex.
+- Mirrored all safety changes in the dashboard core (`web/packages/core/src/safety.ts`).
+
 ## 2.1.2 (2026-08-12)
 
 - **Security:** fix the npm package banner path so the README image resolves correctly.

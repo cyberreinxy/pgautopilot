@@ -45,6 +45,8 @@ function isSensitive(column: string, safety: SafetyState): boolean {
 
 function redactValue(value: unknown, safety: SafetyState): unknown {
   if (Array.isArray(value)) return value.map((v) => redactValue(v, safety));
+  if (value instanceof Date) return value.toISOString();
+  if (Buffer.isBuffer(value)) return `\\x${value.toString("hex")}`;
   if (value !== null && typeof value === "object") {
     const obj = value as Record<string, unknown>;
     const cleaned: Record<string, unknown> = {};

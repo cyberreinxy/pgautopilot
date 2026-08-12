@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { maskCredentials, detectDatabaseUrlConflict } from "../src/config.js";
+import { maskCredentials, detectDatabaseUrlConflict, resolveReadonly } from "../src/config.js";
 
 const A = "postgresql://user:pass1@localhost:5432/db_a";
 const B = "postgresql://user:pass2@localhost:5432/db_b";
@@ -27,6 +27,20 @@ describe("maskCredentials", () => {
   it("returns the input unchanged when it is not a valid URL", () => {
     expect(maskCredentials("not-a-url")).toBe("not-a-url");
   });
+});
+
+describe("resolveReadonly", () => {
+    it("is read-only by default", () => {
+        expect(resolveReadonly([], undefined)).toBe(true);
+    });
+
+    it("allows writes only when ALLOW_WRITES is true", () => {
+        expect(resolveReadonly([], "true")).toBe(false);
+    });
+
+    it("forces read-only with --readonly even when writes are allowed", () => {
+        expect(resolveReadonly(["--readonly"], "true")).toBe(true);
+    });
 });
 
 describe("detectDatabaseUrlConflict", () => {

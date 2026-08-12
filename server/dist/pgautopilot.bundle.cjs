@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.1.2 — self-contained, no npm needed
+// PGAutoPilot v2.1.3 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;
@@ -31638,6 +31638,9 @@ function parseSchemas(value) {
   const schemas2 = (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return schemas2.length > 0 ? schemas2 : ["public"];
 }
+function resolveReadonly(argv, allowWrites) {
+  return argv.includes("--readonly") || allowWrites !== "true";
+}
 function loadConfig(argv) {
   const envFile = loadDotEnv();
   const resolveDb = detectDatabaseUrlConflict(envFile, process.env);
@@ -31661,7 +31664,7 @@ function loadConfig(argv) {
 
   DATABASE_URL was not found in ${resolveDb.from.join(" or ") || "any source"}.`);
   }
-  const readonly2 = argv.includes("--readonly");
+  const readonly2 = resolveReadonly(argv, process.env.ALLOW_WRITES);
   const modeArg = argv.find((a) => a.startsWith("--mode="));
   const mode = modeArg?.split("=")[1] ?? (process.env.NODE_ENV === "production" ? "production" : "development");
   const statementTimeoutMs = Number(process.env.PG_STATEMENT_TIMEOUT_MS ?? "10000");
@@ -31687,7 +31690,8 @@ function loadConfig(argv) {
     extraSensitiveColumns: parseList(process.env.SENSITIVE_COLUMNS),
     statementTimeoutMs: finalTimeoutMs,
     allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
-    schemas: parseSchemas(process.env.PG_SCHEMAS)
+    schemas: parseSchemas(process.env.PG_SCHEMAS),
+    disabledTools: parseList(process.env.DISABLED_TOOLS)
   };
 }
 function connectionSummary(poolConfig) {
@@ -31765,6 +31769,10 @@ function isSensitive(column, safety) {
 function redactValue(value, safety) {
   if (Array.isArray(value))
     return value.map((v) => redactValue(v, safety));
+  if (value instanceof Date)
+    return value.toISOString();
+  if (Buffer.isBuffer(value))
+    return `\\x${value.toString("hex")}`;
   if (value !== null && typeof value === "object") {
     const obj = value;
     const cleaned = {};
@@ -37263,8 +37271,12 @@ ${detail}`
     isError: true
   };
 }
-function registerTools(server, handlers) {
+function registerTools(server, handlers, disabledTools) {
   for (const [name, def] of Object.entries(toolDefinitions)) {
+    if (disabledTools.has(name)) {
+      log.warn(`Tool "${name}" is disabled via DISABLED_TOOLS.`);
+      continue;
+    }
     const handler = handlers[name];
     const wrapped = async (args) => {
       if (!handler) {
@@ -37292,7 +37304,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.1.2"
+    version: "2.1.3"
   });
   let config2 = null;
   let configError = null;
@@ -37311,7 +37323,7 @@ async function main() {
         }
       ]
     });
-    registerTools(server, { mcp_status: statusHandler2 });
+    registerTools(server, { mcp_status: statusHandler2 }, /* @__PURE__ */ new Set());
     const transport2 = new StdioServerTransport();
     await server.connect(transport2);
     log.warn("PGAutoPilot started in not-configured mode. Fix DATABASE_URL in the .env and restart.");
@@ -37347,10 +37359,10 @@ async function main() {
       }
     ]
   });
-  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler });
+  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, config2.disabledTools);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.1.2 ready");
+  log.info("PGAutoPilot v2.1.3 ready");
   log.info(`Connection: ${connectionSummary(config2.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {

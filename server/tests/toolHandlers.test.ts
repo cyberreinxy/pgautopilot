@@ -17,6 +17,7 @@ const CONFIG: AppConfig = {
   statementTimeoutMs: 10000,
   allowRawWrites: false,
   schemas: ["public"],
+  disabledTools: new Set(),
 };
 
 function createStubPool(rowsForQuery: (text: string) => unknown[] = () => []): Pool {
