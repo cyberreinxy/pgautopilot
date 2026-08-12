@@ -155,6 +155,7 @@ Starts the API (default `http://127.0.0.1:3000`) and the Vite dev server with ho
 | `BACKUPS_DIR`               | `./backups`    | Where `db_backup` saves files                             |
 | `DOCKER_CONTAINER`          | -              | Docker container name for `pg_dump` fallback              |
 | `BLOCKED_TABLES`            | -              | Tables to block writes on (comma-separated)               |
+| `HIGH_RISK_TABLES`          | -              | Tables that warn but allow writes (comma-separated)       |
 | `SENSITIVE_COLUMNS`         | -              | Extra columns to redact (comma-separated)                 |
 | `READONLY`                  | `false`        | `true` blocks every write operation, including migrations |
 | `NODE_ENV`                  | `development`  | `production` masks errors and disables per-request logs   |

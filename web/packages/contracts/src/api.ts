@@ -146,6 +146,7 @@ export interface RuntimeConfig {
   databaseUrlConfigured: boolean;
   statementTimeoutMs: number;
   blockedTables: string[];
+  highRiskTables: string[];
   sensitiveColumns: string[];
 }
 

@@ -166,6 +166,12 @@ export function SettingsPage() {
                     value={config.blockedTables.length ? config.blockedTables.join(", ") : "none"}
                   />
                   <Row
+                    label="High-risk tables"
+                    value={
+                      config.highRiskTables.length ? config.highRiskTables.join(", ") : "none"
+                    }
+                  />
+                  <Row
                     label="Sensitive columns"
                     value={
                       config.sensitiveColumns.length

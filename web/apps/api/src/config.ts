@@ -9,6 +9,7 @@ export interface ApiConfig {
   migrationsDir: string;
   dockerContainer: string | null;
   blockedTables: Set<string>;
+  highRiskTables: Set<string>;
   extraSensitiveColumns: Set<string>;
   readonly: boolean;
   liveEvents: boolean;
@@ -79,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     migrationsDir,
     dockerContainer,
     blockedTables: parseList(env.BLOCKED_TABLES),
+    highRiskTables: parseList(env.HIGH_RISK_TABLES),
     extraSensitiveColumns: parseList(env.SENSITIVE_COLUMNS),
     readonly,
     liveEvents,

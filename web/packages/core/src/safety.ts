@@ -23,6 +23,7 @@ export interface SafetyState {
   readonly: boolean;
   mode: "development" | "production";
   blockedTables: Set<string>;
+  highRiskTables: Set<string>;
   sensitiveColumns: Set<string>;
 }
 
@@ -31,10 +32,11 @@ export function buildSafetyState(
   mode: "development" | "production",
   blockedTables: Set<string>,
   extraSensitiveColumns: Set<string>,
+  highRiskTables: Set<string> = new Set(),
 ): SafetyState {
   const sensitiveColumns = new Set(DEFAULT_SENSITIVE_COLUMNS);
   for (const col of extraSensitiveColumns) sensitiveColumns.add(col.toLowerCase());
-  return { readonly, mode, blockedTables, sensitiveColumns };
+  return { readonly, mode, blockedTables, highRiskTables, sensitiveColumns };
 }
 
 function isSensitive(column: string, safety: SafetyState): boolean {
@@ -135,6 +137,12 @@ export function checkWriteAccess(
     return {
       blocked: true,
       message: `[BLOCKED] "${table}" is in BLOCKED_TABLES and cannot be written to.`,
+    };
+  }
+  if (safety.highRiskTables.has(table.toLowerCase())) {
+    return {
+      blocked: false,
+      warning: `[HIGH-RISK] "${table}" is in HIGH_RISK_TABLES. Proceed with caution; verify the operation before executing.`,
     };
   }
   return { blocked: false, warning: null };

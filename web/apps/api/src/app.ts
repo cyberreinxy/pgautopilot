@@ -30,6 +30,7 @@ export function createApp(
     config.mode,
     config.blockedTables,
     config.extraSensitiveColumns,
+    config.highRiskTables,
   );
 
   const hub = changeHub ?? new ChangeHub();
@@ -64,7 +65,12 @@ export function createApp(
     }
     next();
   });
-  app.use(createCorsMiddleware({ allowedOrigins: config.corsOrigins, production: config.mode === "production" }));
+  app.use(
+    createCorsMiddleware({
+      allowedOrigins: config.corsOrigins,
+      production: config.mode === "production",
+    }),
+  );
   if (config.trustProxy !== false) {
     app.set("trust proxy", config.trustProxy);
   }

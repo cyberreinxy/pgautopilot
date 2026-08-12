@@ -16,6 +16,7 @@ function testConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     snapshotsDir: "./snapshots",
     dockerContainer: null,
     blockedTables: new Set(),
+    highRiskTables: new Set(),
     extraSensitiveColumns: new Set(),
     readonly: false,
     liveEvents: false,

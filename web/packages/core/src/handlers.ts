@@ -419,6 +419,8 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
           `LIMIT value (${limitValue}) exceeds maximum allowed (${MAX_RAW_TAKE}). Use a smaller limit or paginate.`,
         );
       }
+    } else if (safety.readonly) {
+      throw new Error("Raw write statements are blocked while the server is read-only.");
     } else if (!confirmed) {
       throw new Error(
         "Only SELECT queries are allowed via db_raw_query. A non-SELECT statement requires explicit user confirmation (confirmed: true) and a server with ALLOW_RAW_WRITES enabled.",
@@ -539,6 +541,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
     const tableName = String(args.table);
     const access = checkWriteAccess(tableName, "create", safety);
     if (access.blocked) throw new Error(access.message);
+    const warnings = access.warning ? [access.warning] : [];
     const table = await resolveTableName(pool, tableName);
 
     const data = (args.data ?? {}) as Record<string, unknown>;
@@ -550,6 +553,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
         table: table.name,
         wouldCreate: cleaned,
         ...(stripped.length > 0 && { strippedFields: stripped }),
+        ...(warnings.length > 0 && { warnings }),
       };
     }
 
@@ -567,6 +571,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
       return {
         created: redactRow(result.rows[0], safety),
         ...(stripped.length > 0 && { strippedFields: stripped }),
+        ...(warnings.length > 0 && { warnings }),
       };
     } catch (err) {
       throw new Error(decodePgError(err, safety.mode));
@@ -577,6 +582,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
     const tableName = String(args.table);
     const access = checkWriteAccess(tableName, "upsert", safety);
     if (access.blocked) throw new Error(access.message);
+    const warnings = access.warning ? [access.warning] : [];
     const table = await resolveTableName(pool, tableName);
 
     const where = (args.where ?? {}) as Record<string, unknown>;
@@ -613,6 +619,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
         wouldInsert: cleanedInsert,
         wouldUpdate: cleanedUpdate,
         ...(stripped.length > 0 && { strippedFields: stripped }),
+        ...(warnings.length > 0 && { warnings }),
       };
     }
 
@@ -625,6 +632,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, options: CoreOpt
       return {
         upserted: redactRow(result.rows[0], safety),
         ...(stripped.length > 0 && { strippedFields: stripped }),
+        ...(warnings.length > 0 && { warnings }),
       };
     } catch (err) {
       throw new Error(decodePgError(err, safety.mode));

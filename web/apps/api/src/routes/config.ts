@@ -19,6 +19,7 @@ export function createConfigRouter(
       databaseUrlConfigured: Boolean(config.databaseUrl),
       statementTimeoutMs: config.statementTimeoutMs,
       blockedTables: [...safety.blockedTables],
+      highRiskTables: [...safety.highRiskTables],
       sensitiveColumns: [...safety.sensitiveColumns],
     });
   });
