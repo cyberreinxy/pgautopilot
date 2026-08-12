@@ -34,7 +34,7 @@ export interface ApiContext {
 export function createApiRouter(context: ApiContext): Router {
   const router = Router();
   router.use(createHealthRouter(context.diagnostics, context.healthOptions));
-  router.use(createToolsRouter(context.handlers, context.config.mode, context.rateLimiter));
+  router.use(createToolsRouter(context.handlers, context.config.mode, context.rateLimiter, context.config.disabledTools));
   router.use(createSchemaRouter(context.pool, context.config.mode));
   router.use(createMigrationsRouter(context.pool, context.migrationsOptions, context.rateLimiter));
   router.use(createSnapshotsRouter(context.pool, context.snapshotsOptions, context.rateLimiter));

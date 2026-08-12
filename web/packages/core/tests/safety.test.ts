@@ -25,6 +25,12 @@ describe("redactRow", () => {
     const out = redactRow(row, safety());
     expect(out.tokens).toEqual([{ scope: "r", reset_token: "***REDACTED***" }, { scope: "w" }]);
   });
+
+  it("serializes Date values instead of collapsing them to {}", () => {
+    const date = new Date("2026-08-12T00:00:00.000Z");
+    const out = redactRow({ id: 1, created_at: date }, safety());
+    expect(out).toEqual({ id: 1, created_at: "2026-08-12T00:00:00.000Z" });
+  });
 });
 
 describe("redactRows", () => {

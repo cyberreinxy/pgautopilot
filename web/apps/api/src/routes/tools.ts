@@ -32,16 +32,21 @@ export function createToolsRouter(
   handlers: HandlerMap,
   mode: "development" | "production",
   rateLimiter: RequestHandler | null = null,
+  disabledTools: Set<string> = new Set(),
 ): Router {
   const router = Router();
 
   router.get("/tools", (_req, res) => {
-    res.json({ tools: TOOL_INDEX });
+    res.json({ tools: TOOL_INDEX.filter((t) => !disabledTools.has(t.name)) });
   });
 
   router.post("/tools/:name", rateLimiter ?? noopRateLimiter, async (req, res, next) => {
     const name = req.params.name as ToolName;
     try {
+      if (disabledTools.has(name)) {
+        res.status(403).json({ error: `Tool "${name}" is disabled on this server.` });
+        return;
+      }
       const handler = handlers[name];
       if (!handler) {
         res.status(404).json({ error: `Unknown tool: "${name}"` });

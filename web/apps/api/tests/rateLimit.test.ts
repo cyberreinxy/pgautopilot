@@ -18,6 +18,7 @@ function testConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     blockedTables: new Set(),
     highRiskTables: new Set(),
     extraSensitiveColumns: new Set(),
+    disabledTools: new Set(),
     readonly: false,
     liveEvents: false,
     liveEventsIntervalMs: 5000,

@@ -48,6 +48,10 @@ function redactValue(value: unknown, safety: SafetyState, key: string): unknown 
   if (Array.isArray(value)) {
     return value.map((item) => redactValue(item, safety, ""));
   }
+  if (value instanceof Date) return value.toISOString();
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
+    return `\\x${value.toString("hex")}`;
+  }
   if (value !== null && typeof value === "object") {
     const cleaned: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {

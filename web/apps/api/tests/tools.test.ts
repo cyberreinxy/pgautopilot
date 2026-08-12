@@ -18,6 +18,7 @@ function testConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     blockedTables: new Set(),
     highRiskTables: new Set(),
     extraSensitiveColumns: new Set(),
+    disabledTools: new Set(),
     readonly: false,
     liveEvents: false,
     liveEventsIntervalMs: 5000,
@@ -51,5 +52,19 @@ describe("tools API", () => {
       .send({ table: "users", where: { id: 1 }, dryRun: true });
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("Read-only mode is enabled.");
+  });
+
+  it("excludes disabled tools from the index and blocks invocation", async () => {
+    const app = createApp(stubPool, testConfig({ disabledTools: new Set(["db_delete_many"]) }));
+    const indexRes = await request(app).get("/api/tools");
+    expect(indexRes.status).toBe(200);
+    const names = (indexRes.body.tools as { name: string }[]).map((t) => t.name);
+    expect(names).not.toContain("db_delete_many");
+
+    const invokeRes = await request(app)
+      .post("/api/tools/db_delete_many")
+      .send({ table: "users", where: { id: 1 }, dryRun: true });
+    expect(invokeRes.status).toBe(403);
+    expect(invokeRes.body.error).toContain("disabled");
   });
 });

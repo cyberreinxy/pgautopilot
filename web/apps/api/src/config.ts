@@ -11,6 +11,7 @@ export interface ApiConfig {
   blockedTables: Set<string>;
   highRiskTables: Set<string>;
   extraSensitiveColumns: Set<string>;
+  disabledTools: Set<string>;
   readonly: boolean;
   liveEvents: boolean;
   liveEventsIntervalMs: number;
@@ -59,7 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const snapshotsDir = env.SNAPSHOTS_DIR ?? "./snapshots";
   const migrationsDir = env.MIGRATIONS_DIR ?? "./migrations";
   const dockerContainer = env.DOCKER_CONTAINER?.trim() || null;
-  const readonly = env.READONLY === "true" || env.READONLY === "1";
+  const readonly = env.READONLY === "true" || env.READONLY === "1" || env.ALLOW_WRITES !== "true";
   const liveEvents = env.LIVE_EVENTS !== "false" && env.LIVE_EVENTS !== "0";
   const liveEventsIntervalMs = Number(env.LIVE_EVENTS_INTERVAL_MS ?? 5000);
   const mode = env.NODE_ENV === "production" ? "production" : "development";
@@ -82,6 +83,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     blockedTables: parseList(env.BLOCKED_TABLES),
     highRiskTables: parseList(env.HIGH_RISK_TABLES),
     extraSensitiveColumns: parseList(env.SENSITIVE_COLUMNS),
+    disabledTools: parseList(env.DISABLED_TOOLS),
     readonly,
     liveEvents,
     liveEventsIntervalMs: Number.isFinite(liveEventsIntervalMs)
