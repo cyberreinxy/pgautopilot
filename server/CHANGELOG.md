@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.1 (2026-08-12)
+
+- **Security:** bump `@modelcontextprotocol/sdk` to `^1.30.0` to fix three known advisories in the bundled runtime (instance-reuse data leak, DNS rebinding, ReDoS).
+- Docs: corrected the supported-clients note in the README.
+
 ## 2.1.0 (2026-08-11)
 
 - **Security:** `db_raw_query` writes are blocked in read-only mode (`--readonly`), even with `ALLOW_RAW_WRITES=true`.

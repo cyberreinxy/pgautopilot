@@ -75,7 +75,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.1.0",
+    version: "2.1.1",
   });
 
   let config: ReturnType<typeof loadConfig> | null = null;
@@ -158,7 +158,7 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.1.0 ready");
+  log.info("PGAutoPilot v2.1.1 ready");
   log.info(`Connection: ${connectionSummary(config.poolConfig)}`);
   log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
   if (safety.blockedTables.size > 0) {

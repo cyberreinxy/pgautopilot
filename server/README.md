@@ -78,10 +78,10 @@ npm install -g pgautopilot
 
 **No npm — one-line installer** (clones, adds to PATH; re-run to update):
 
-| Platform   | Command                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------- |
-| Linux/mac  | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.sh \| bash`      |
-| Windows    | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.ps1 \| iex`             |
+| Platform  | Command                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| Linux/mac | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.sh \| bash` |
+| Windows   | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.ps1 \| iex`        |
 
 **Download & run:** `node pgautopilot.bundle.cjs`
 
@@ -89,10 +89,10 @@ npm install -g pgautopilot
 
 **Uninstall:**
 
-| Platform   | Command                                                                                              |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| Linux/mac  | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.sh \| bash`     |
-| Windows    | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.ps1 \| iex`            |
+| Platform  | Command                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| Linux/mac | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.sh \| bash` |
+| Windows   | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.ps1 \| iex`        |
 
 Installs are idempotent and signed — see [Software Signing](#software-signing).
 
@@ -100,7 +100,7 @@ Installs are idempotent and signed — see [Software Signing](#software-signing)
 
 ## Supported MCP Clients
 
-Claude Desktop · Cursor · VS Code + Copilot · Gemini CLI · Windsurf · Zed · JetBrains · Continue · Cline · Roo Code · Neovim — all ✅.
+Claude Desktop · Cursor · VS Code + Copilot · Gemini CLI · Windsurf · Zed · JetBrains · Continue · Cline · Roo Code · Neovim.
 
 ---
 
@@ -254,17 +254,17 @@ prefer `PGSSLMODE=verify-full`.
 ### Write tools
 
 | Tool             | Use when...                     | Safety                                          |
-| ---------------- | -------------------------------- | ----------------------------------------------- |
-| `db_create`      | "Add a new user"                 | Dry-run supported, schema-validated             |
+| ---------------- | ------------------------------- | ----------------------------------------------- |
+| `db_create`      | "Add a new user"                | Dry-run supported, schema-validated             |
 | `db_upsert`      | "Create or update this product" | Dry-run supported, conflict-safe                |
 | `db_update_many` | "Update all shipped orders"     | Warns on >10 rows, dry-run supported            |
-| `db_delete_many` | "Delete old logs"                | Warns on >10 rows, `confirmAll` for full clears |
+| `db_delete_many` | "Delete old logs"               | Warns on >10 rows, `confirmAll` for full clears |
 
 ### Maintenance tools
 
-| Tool         | Use when...            | Output                      |
-| ------------ | ----------------------- | ---------------------------- |
-| `db_backup`  | "Back up the database" | Full SQL dump via `pg_dump` |
+| Tool        | Use when...            | Output                      |
+| ----------- | ---------------------- | --------------------------- |
+| `db_backup` | "Back up the database" | Full SQL dump via `pg_dump` |
 
 ---
 
@@ -324,12 +324,12 @@ and manage it yourself with `psql` or pgAdmin.
 
 ### 1. Install
 
-| Platform                | How                                                                                                       |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| Windows                 | [EDB installer](https://www.postgresql.org/download/windows/). Note the superuser password it prompts for. |
-| macOS                   | `brew install postgresql@16` → `brew services start postgresql@16`                                       |
-| Linux (Debian/Ubuntu)   | `sudo apt install postgresql` → `sudo systemctl enable --now postgresql`                                  |
-| Linux (Fedora)          | `sudo dnf install postgresql-server`                                                                      |
+| Platform              | How                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Windows               | [EDB installer](https://www.postgresql.org/download/windows/). Note the superuser password it prompts for. |
+| macOS                 | `brew install postgresql@16` → `brew services start postgresql@16`                                         |
+| Linux (Debian/Ubuntu) | `sudo apt install postgresql` → `sudo systemctl enable --now postgresql`                                   |
+| Linux (Fedora)        | `sudo dnf install postgresql-server`                                                                       |
 
 ### 2. Set the `postgres` password
 
@@ -375,20 +375,20 @@ pgautopilot --readonly --mode=production
 | `PGSSLMODE`               | auto          | SSL mode: `disable`, `prefer`, `require`, `verify-full` |
 | `PGPOOL_MAX`              | `5`           | Maximum simultaneous database connections               |
 | `PG_CONNECT_TIMEOUT_MS`   | `10000`       | Connection timeout (ms)                                 |
-| `PG_IDLE_TIMEOUT_MS`      | `30000`       | Idle-connection timeout (ms)                             |
-| `PG_STATEMENT_TIMEOUT_MS` | `10000`       | Max single-query time (ms)                               |
-| `BACKUPS_DIR`             | `./backups`   | Where `db_backup` saves files                            |
-| `DOCKER_CONTAINER`        | -             | Docker container name for `pg_dump` fallback             |
-| `BLOCKED_TABLES`          | -             | Tables to block writes on (comma-separated)               |
-| `HIGH_RISK_TABLES`        | -             | Tables that warn but allow writes (comma-separated)       |
-| `SENSITIVE_COLUMNS`       | -             | Extra columns to redact (comma-separated)                 |
-| `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)        |
-| `NODE_ENV`                | `development` | `production` disables per-request logging                 |
+| `PG_IDLE_TIMEOUT_MS`      | `30000`       | Idle-connection timeout (ms)                            |
+| `PG_STATEMENT_TIMEOUT_MS` | `10000`       | Max single-query time (ms)                              |
+| `BACKUPS_DIR`             | `./backups`   | Where `db_backup` saves files                           |
+| `DOCKER_CONTAINER`        | -             | Docker container name for `pg_dump` fallback            |
+| `BLOCKED_TABLES`          | -             | Tables to block writes on (comma-separated)             |
+| `HIGH_RISK_TABLES`        | -             | Tables that warn but allow writes (comma-separated)     |
+| `SENSITIVE_COLUMNS`       | -             | Extra columns to redact (comma-separated)               |
+| `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)      |
+| `NODE_ENV`                | `development` | `production` disables per-request logging               |
 
 **Connection string examples:**
 
-| Where                | URL                                                                  |
-| -------------------- | -------------------------------------------------------------------- |
+| Where                | URL                                                                 |
+| -------------------- | ------------------------------------------------------------------- |
 | Localhost            | `postgresql://postgres:mypass@localhost:5432/mydb`                  |
 | Remote server        | `postgresql://admin:secret@db.mycompany.com:5432/production`        |
 | Docker (port-mapped) | `postgresql://user:pass@localhost:5433/mydb`                        |
@@ -431,7 +431,7 @@ published once the project reaches a stable release.
 ## Software Signing
 
 | Method         | How to verify                                                         |
-| -------------- | ----------------------------------------------------------------------|
+| -------------- | --------------------------------------------------------------------- |
 | SHA-256 hashes | `npm run verify` or `node scripts/verify.mjs`                         |
 | GPG signature  | `npm run verify:gpg` (public key: [`PUBLIC_KEY.asc`](PUBLIC_KEY.asc)) |
 
@@ -461,14 +461,14 @@ Install scripts verify `checksums.txt` automatically after cloning. On mismatch,
 
 ## Troubleshooting
 
-| Error                         | Likely cause                         | How to verify           | Fix                                                   |
-| ----------------------------- | ------------------------------------ | ----------------------- | ------------------------------------------------------ |
-| `DATABASE_URL is not set`     | `.env` not found or missing          | `echo $DATABASE_URL`    | Create `.env` in the working directory                |
-| `Connection refused`          | PostgreSQL not running or wrong URL  | `pg_isready`             | Check host/port, Docker port mapping                  |
-| `SSL connection error`        | Cloud DB requires SSL                | Check provider docs      | Set `PGSSLMODE=require`                               |
-| `Unknown table` / column      | Typo or wrong schema                 | Run `db_overview` first  | Use exact names from schema                           |
-| `Only SELECT queries allowed` | Using `db_raw_query` for writes      | N/A                       | Use `db_create`, `db_update_many`, etc.               |
-| `pg_dump failed`              | `pg_dump` not installed              | `which pg_dump`           | Install `postgresql-client` or set `DOCKER_CONTAINER` |
+| Error                         | Likely cause                        | How to verify           | Fix                                                   |
+| ----------------------------- | ----------------------------------- | ----------------------- | ----------------------------------------------------- |
+| `DATABASE_URL is not set`     | `.env` not found or missing         | `echo $DATABASE_URL`    | Create `.env` in the working directory                |
+| `Connection refused`          | PostgreSQL not running or wrong URL | `pg_isready`            | Check host/port, Docker port mapping                  |
+| `SSL connection error`        | Cloud DB requires SSL               | Check provider docs     | Set `PGSSLMODE=require`                               |
+| `Unknown table` / column      | Typo or wrong schema                | Run `db_overview` first | Use exact names from schema                           |
+| `Only SELECT queries allowed` | Using `db_raw_query` for writes     | N/A                     | Use `db_create`, `db_update_many`, etc.               |
+| `pg_dump failed`              | `pg_dump` not installed             | `which pg_dump`         | Install `postgresql-client` or set `DOCKER_CONTAINER` |
 
 ---
 
@@ -494,10 +494,10 @@ src/
 | ------------------- | ------------------------------------------------------ |
 | `npm run dev`       | Start the dev server with hot-reload                   |
 | `npm run build`     | Compile TypeScript and bundle into a single executable |
-| `npm start`         | Run the compiled version                                |
-| `npm run typecheck` | Full TypeScript type checking                           |
-| `npm run lint`      | TypeScript type-check + ESLint                          |
-| `npm run format`    | Auto-format source files with Prettier                  |
+| `npm start`         | Run the compiled version                               |
+| `npm run typecheck` | Full TypeScript type checking                          |
+| `npm run lint`      | TypeScript type-check + ESLint                         |
+| `npm run format`    | Auto-format source files with Prettier                 |
 
 ---
 
