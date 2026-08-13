@@ -97,6 +97,7 @@ root/
 │  │  ├─ sqlDump.ts               Backups via pg_dump
 │  │  └─ *test.ts                 Colocated vitest tests
 │  ├─ dist/                       Compiled + bundled artifact (pgautopilot.bundle.cjs)
+│  ├─ config/                     Ready-to-use MCP configs for every editor/CLI (one folder per client)
 │  ├─ scripts/                    bundle / sign / verify installers
 │  ├─ docker-compose.yml          PostgreSQL 16 + MCP server
 │  └─ package.json                npm package `pgautopilot`
@@ -190,11 +191,16 @@ DATABASE_URL=postgresql://user:password@localhost:5432/yourdb
 ```
 
 Connect your AI assistant — identical config for VS Code, Cursor, Windsurf,
-Claude Desktop, Zed, JetBrains, Neovim:
+Claude Desktop, Zed, JetBrains, Neovim, opencode, Cline, Kilo, Roo Code,
+Gemini CLI, Codex CLI, Copilot CLI, and more:
 
 ```json
 { "mcpServers": { "postgres": { "command": "pgautopilot" } } }
 ```
+
+Ready-to-copy config files for every supported client live in
+[`server/config/`](server/config/) — each folder has a README showing where to
+put the file in your project.
 
 Then just ask: _"Show me all tables."_ · _"How many users signed up this month?"_ ·
 _"Find orders over $500 by customer."_ · _"Add a product called 'Widget Pro' at $29.99."_

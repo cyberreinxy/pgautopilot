@@ -1,0 +1,13 @@
+{
+  "mcp": {
+    "pgautopilot": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "pgautopilot"
+      ],
+      "enabled": true
+    }
+  }
+}

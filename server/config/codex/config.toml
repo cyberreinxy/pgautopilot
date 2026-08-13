@@ -1,0 +1,3 @@
+[mcp_servers.pgautopilot]
+command = "npx"
+args = ["-y", "pgautopilot"]

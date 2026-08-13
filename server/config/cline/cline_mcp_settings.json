@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pgautopilot": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "pgautopilot"
+      ],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

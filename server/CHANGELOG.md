@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.0 (2026-08-13)
+
+- **Added:** ready-to-use MCP configs for opencode, Cline, Kilo Code, Roo Code, JetBrains, Zed, Continue, Gemini CLI, OpenAI Codex CLI, GitHub Copilot CLI, and Kimi CLI — alongside the existing Cursor, VS Code/Copilot, Windsurf, and Claude configs.
+- **Changed:** all client configs now live in a single `config/` folder (one subfolder per client, each with a README explaining where to copy it). The project root stays clean.
+- **Changed:** `postinstall` regenerates the whole `config/` folder into the installing project, including TOML support for Codex and an opencode template with the JSON schema reference.
+- **Security:** `autoApprove` / `alwaysAllow` are left empty in every config so write tools always require confirmation.
+
 ## 2.1.3 (2026-08-12)
 
 **Security patch** — resolves the open items from the v2.1.1 security review.

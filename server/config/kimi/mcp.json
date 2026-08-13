@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pgautopilot": {
+      "command": "npx",
+      "args": [
+        "pgautopilot"
+      ]
+    }
+  }
+}

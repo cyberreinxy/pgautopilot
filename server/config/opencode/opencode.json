@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "pgautopilot": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "pgautopilot"
+      ],
+      "enabled": true
+    }
+  }
+}

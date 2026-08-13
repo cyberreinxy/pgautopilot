@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "pgautopilot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "pgautopilot"
+      ]
+    }
+  }
+}
