@@ -5,6 +5,7 @@
 - **Added:** `glama.json` at the repo root to claim the MCP server listing on Glama.
 - **Added:** Glama score badge to the README.
 - **Fixed:** Docker build — the image now copies `tsconfig.build.json` and `scripts/` in the build stage, and the runtime stage installs production deps with `--ignore-scripts` (the Docker build previously failed because `tsc -p tsconfig.build.json` and `postbuild` could not find their inputs).
+- **Added:** root `Dockerfile` that builds `server/`, so Glama's release pipeline (which only auto-detects a root-level Dockerfile) can build the server.
 
 ## 2.2.0 (2026-08-13)
 
