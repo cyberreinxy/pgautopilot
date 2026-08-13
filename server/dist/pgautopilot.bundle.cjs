@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.1.3 — self-contained, no npm needed
+// PGAutoPilot v2.2.0 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;

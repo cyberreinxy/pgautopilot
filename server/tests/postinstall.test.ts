@@ -69,7 +69,7 @@ describe("writeEditorConfig", () => {
 
 describe("editorConfigs", () => {
     it("includes a project-scoped Claude config", () => {
-        const claude = editorConfigs.find((c) => c.rel === ".claude/mcp.json");
+        const claude = editorConfigs.find((c) => c.rel === "claude/mcp.json");
         expect(claude).toBeDefined();
         if (claude) {
             expect(claude.key).toBe("mcpServers");
@@ -78,8 +78,8 @@ describe("editorConfigs", () => {
     });
 
     it("generates a valid Claude project config", () => {
-        const file = join(tempDir(), ".claude", "mcp.json");
-        const claude = editorConfigs.find((c) => c.rel === ".claude/mcp.json");
+        const file = join(tempDir(), "claude", "mcp.json");
+        const claude = editorConfigs.find((c) => c.rel === "claude/mcp.json");
         expect(claude).toBeDefined();
         if (claude) {
             expect(writeEditorConfig(file, claude.key, claude.entry)).toBe("created");
