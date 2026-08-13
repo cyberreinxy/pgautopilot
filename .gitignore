@@ -2,3 +2,4 @@
 !.github/workflows/
 !.github/dependabot.yml
 docs/
+.env

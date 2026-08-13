@@ -80,7 +80,7 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.1.3",
+    version: "2.2.1",
   });
 
   let config: ReturnType<typeof loadConfig> | null = null;

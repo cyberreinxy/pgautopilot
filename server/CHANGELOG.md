@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1 (2026-08-13)
+
+- **Added:** `glama.json` at the repo root to claim the MCP server listing on Glama.
+- **Added:** Glama score badge to the README.
+- **Fixed:** Docker build — the image now copies `tsconfig.build.json` and `scripts/` in the build stage, and the runtime stage installs production deps with `--ignore-scripts` (the Docker build previously failed because `tsc -p tsconfig.build.json` and `postbuild` could not find their inputs).
+
 ## 2.2.0 (2026-08-13)
 
 - **Added:** ready-to-use MCP configs for opencode, Cline, Kilo Code, Roo Code, JetBrains, Zed, Continue, Gemini CLI, OpenAI Codex CLI, GitHub Copilot CLI, and Kimi CLI, alongside the existing Cursor, VS Code/Copilot, Windsurf, and Claude configs.
