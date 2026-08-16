@@ -530,6 +530,8 @@ pgautopilot --readonly --mode=production
 | `BLOCKED_TABLES`          | -             | Tables to block writes on (comma-separated)              |
 | `HIGH_RISK_TABLES`        | -             | Tables that warn but allow writes (comma-separated)      |
 | `SENSITIVE_COLUMNS`       | -             | Extra columns to redact (comma-separated)                |
+| `ALLOW_WRITES`            | -             | Set `true` to enable write tools (read-only by default)  |
+| `DISABLED_TOOLS`          | -             | Tools to disable entirely (comma-separated)              |
 | `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)       |
 | `NODE_ENV`                | `development` | `production` disables per-request logging                 |
 
@@ -549,7 +551,9 @@ pgautopilot --readonly --mode=production
 | `BLOCKED_TABLES`            | -              | Tables to block writes on (comma-separated)               |
 | `HIGH_RISK_TABLES`          | -              | Tables that warn but allow writes (comma-separated)       |
 | `SENSITIVE_COLUMNS`         | -              | Extra columns to redact (comma-separated)                 |
-| `READONLY`                  | `false`        | `true` blocks every write operation, including migrations |
+| `ALLOW_WRITES`              | -              | Set `true` to enable write tools (read-only by default)   |
+| `DISABLED_TOOLS`            | -              | Tools to disable entirely (comma-separated)               |
+| `READONLY`                  | `false`        | `true` blocks every write, even with `ALLOW_WRITES=true`  |
 | `NODE_ENV`                  | `development`  | `production` masks errors and disables per-request logs   |
 | `RATE_LIMIT_MAX`            | -              | Requests per window for tool/migration endpoints          |
 | `RATE_LIMIT_WINDOW_MS`      | `60000`        | Rate-limit window                                         |

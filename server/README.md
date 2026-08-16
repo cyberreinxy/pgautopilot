@@ -385,6 +385,8 @@ pgautopilot --readonly --mode=production
 | `BLOCKED_TABLES`          | -             | Tables to block writes on (comma-separated)             |
 | `HIGH_RISK_TABLES`        | -             | Tables that warn but allow writes (comma-separated)     |
 | `SENSITIVE_COLUMNS`       | -             | Extra columns to redact (comma-separated)               |
+| `ALLOW_WRITES`            | -             | Set `true` to enable write tools (read-only by default) |
+| `DISABLED_TOOLS`          | -             | Tools to disable entirely (comma-separated)             |
 | `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)      |
 | `NODE_ENV`                | `development` | `production` disables per-request logging               |
 
