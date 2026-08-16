@@ -1,5 +1,6 @@
 .github/*
 !.github/workflows/
 !.github/dependabot.yml
+!.github/FUNDING.yml
 docs/
 .env

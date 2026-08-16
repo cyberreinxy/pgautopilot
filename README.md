@@ -14,6 +14,8 @@
 
 **Model-agnostic PostgreSQL access for AI assistants, plus a hardened web dashboard.**
 
+<a href="https://github.com/sponsors/cyberreinxy"><iframe src="https://github.com/sponsors/cyberreinxy/button" title="Sponsor cyberreinxy" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe></a>
+
 PGAutoPilot lets any AI assistant safely explore, query, and manage a
 PostgreSQL database in natural language through an MCP server, and gives you a
 full management UI through an optional dashboard. Both entry points share the

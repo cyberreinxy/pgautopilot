@@ -7,8 +7,11 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-111111?style=for-the-badge&logo=typescript&logoColor=33FF99)](tsconfig.json)
 [![MCP](https://img.shields.io/badge/MCP-111111?style=for-the-badge)](https://modelcontextprotocol.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-111111?style=for-the-badge&logo=postgresql&logoColor=33FF99)](https://www.postgresql.org)
+[![pgautopilot MCP server](https://glama.ai/mcp/servers/cyberreinxy/pgautopilot/badges/score.svg)](https://glama.ai/mcp/servers/cyberreinxy/pgautopilot)
 
 **The PostgreSQL MCP server.** Talk to any database through any AI assistant.
+
+<a href="https://github.com/sponsors/cyberreinxy"><iframe src="https://github.com/sponsors/cyberreinxy/button" title="Sponsor cyberreinxy" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe></a>
 
 `npx pgautopilot` · `npm install -g pgautopilot`
 
