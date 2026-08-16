@@ -23,7 +23,7 @@
     "@pgautopilot/config": "workspace:^",
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.1.0",
-    "eslint-plugin-react-refresh": "^0.4.16",
+    "eslint-plugin-react-refresh": "^0.5.3",
     "prettier": "^3.3.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0",
