@@ -5,7 +5,7 @@ Thank you for your interest in contributing. Please read this guide before openi
 ## Before You Start
 
 - **Node.js 18+** is required to build and test.
-- **TypeScript strict mode** — no `any` types, no unused variables.
+- **TypeScript strict mode:** no `any` types, no unused variables.
 - **Keep dependencies minimal.** Every new dependency must be justified in the PR description.
 - **Test your changes.** Run `npm run typecheck` and `npm run lint` before committing.
 
@@ -37,4 +37,4 @@ If you discover a security vulnerability, please report it privately via [GitHub
 
 ## Code of Conduct
 
-Be respectful and constructive. This is a small community project — treat others as you would like to be treated.
+Be respectful and constructive. This is a small community project; treat others as you would like to be treated.

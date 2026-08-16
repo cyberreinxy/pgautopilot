@@ -11,14 +11,14 @@
 
 **The PostgreSQL MCP server.** Talk to any database through any AI assistant.
 
-<a href="https://github.com/sponsors/cyberreinxy"><iframe src="https://github.com/sponsors/cyberreinxy/button" title="Sponsor cyberreinxy" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe></a>
+[![Sponsor cyberreinxy](https://img.shields.io/badge/Sponsor-cyberreinxy-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/cyberreinxy)
 
 `npx pgautopilot` · `npm install -g pgautopilot`
 
 ---
 
 PGAutoPilot is a production-ready PostgreSQL MCP server that lets any AI
-assistant safely interact with PostgreSQL in natural language — schema-aware
+assistant safely interact with PostgreSQL in natural language: schema-aware
 query generation, enterprise safety controls, and minimal config in a single
 executable.
 
@@ -79,7 +79,7 @@ You: "Show me customers that spent more than $500."
 npm install -g pgautopilot
 ```
 
-**No npm — one-line installer** (clones, adds to PATH; re-run to update):
+**No npm, one-line installer** (clones, adds to PATH; re-run to update):
 
 | Platform  | Command                                                                                        |
 | --------- | ---------------------------------------------------------------------------------------------- |
@@ -97,7 +97,7 @@ npm install -g pgautopilot
 | Linux/mac | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.sh \| bash` |
 | Windows   | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.ps1 \| iex`        |
 
-Installs are idempotent and signed — see [Software Signing](#software-signing).
+Installs are idempotent and signed; see [Software Signing](#software-signing).
 
 ---
 
@@ -115,7 +115,7 @@ Create a `.env` anywhere on your machine (PGAutoPilot finds it automatically):
 DATABASE_URL=postgresql://user:password@localhost:5432/yourdb
 ```
 
-Connect your AI assistant — identical config for VS Code, Cursor, Windsurf,
+Connect your AI assistant, identical config for VS Code, Cursor, Windsurf,
 Claude Desktop, Zed, JetBrains, Neovim:
 
 ```json
@@ -213,7 +213,7 @@ write. Extend via `SENSITIVE_COLUMNS`.
 ### Least-privilege database role
 
 Do not connect with a superuser or the application's primary role. Create a
-dedicated role per connection mode and point `DATABASE_URL` at it — the Postgres
+dedicated role per connection mode and point `DATABASE_URL` at it. The Postgres
 role is the security boundary, not the client.
 
 ```sql
@@ -230,11 +230,11 @@ prefer `PGSSLMODE=verify-full`.
 
 ### Security
 
-- **Responsible disclosure** — report vulnerabilities privately via [GitHub Security Advisories](https://github.com/cyberreinxy/pgautopilot/security/advisories).
-- **Signed releases** — every release is SHA-256 checksummed and GPG-signed.
+- **Responsible disclosure:** report vulnerabilities privately via [GitHub Security Advisories](https://github.com/cyberreinxy/pgautopilot/security/advisories).
+- **Signed releases:** every release is SHA-256 checksummed and GPG-signed.
 - **Zero runtime dependencies** in the bundled build.
-- **Logging policy** — connection strings are never logged; per-request logging off in `--mode=production`.
-- **Authentication** — entirely the `DATABASE_URL` credential; PGAutoPilot doesn't manage users or tokens.
+- **Logging policy:** connection strings are never logged; per-request logging off in `--mode=production`.
+- **Authentication:** entirely the `DATABASE_URL` credential; PGAutoPilot doesn't manage users or tokens.
 
 ---
 
@@ -305,7 +305,7 @@ Tool:   db_delete_many(table="logs", where={"created_at":{"lt":"2025-01-01"}}, d
 ```
 
 Every write tool is dry-run capable, and every query produces the exact
-parameterized SQL that runs — nothing touches your database silently.
+parameterized SQL that runs, nothing touches your database silently.
 
 ---
 
@@ -336,7 +336,7 @@ and manage it yourself with `psql` or pgAdmin.
 
 ### 2. Set the `postgres` password
 
-(Needed for TCP login; Windows/macOS set it at install time — skip to step 3):
+(Needed for TCP login; Windows/macOS set it at install time, so skip to step 3 if set):
 
 ```bash
 sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'mypass';"
@@ -358,7 +358,7 @@ DATABASE_URL=postgresql://postgres:mypass@localhost:5432/mydb
 
 New server: Host `localhost` · Port `5432` · Maintenance DB `postgres` · Username `postgres` · your password. Browse tables and run queries while PGAutoPilot works against the same database.
 
-> **Backups** need `pg_dump` — bundled with PostgreSQL on Windows; install the client tools (`postgresql-client` / `libpq`) on macOS/Linux. See [Troubleshooting](#troubleshooting).
+> **Backups** need `pg_dump`, bundled with PostgreSQL on Windows; install the client tools (`postgresql-client` / `libpq`) on macOS/Linux. See [Troubleshooting](#troubleshooting).
 >
 > **Tip:** for production, create a dedicated least-privilege role for PGAutoPilot (see [Safety & Security](#safety--security)) and keep your `postgres` login for pgAdmin/psql.
 
@@ -402,15 +402,15 @@ pgautopilot --readonly --mode=production
 | AWS RDS              | `postgresql://admin:pass@xxx.us-east-1.rds.amazonaws.com:5432/mydb` |
 | Render               | `postgresql://user:pass@host.render.com:5432/mydb`                  |
 
-**Cloud SSL:** cloud providers (Neon, Supabase, RDS, Render) need SSL — set
+**Cloud SSL:** cloud providers (Neon, Supabase, RDS, Render) need SSL; set
 `PGSSLMODE=require` (stronger: `verify-full`); auto-detected for most providers.
 
 ---
 
 ## Performance
 
-PGAutoPilot adds minimal overhead over a direct connection — latency depends on
-your database and network — with a zero-dependency single-file executable and
+PGAutoPilot adds minimal overhead over a direct connection, latency depends on
+your database and network, with a zero-dependency single-file executable and
 configurable pool size and statement timeouts. Full benchmarks will be
 published once the project reaches a stable release.
 
@@ -446,21 +446,21 @@ Install scripts verify `checksums.txt` automatically after cloning. On mismatch,
 
 ## FAQ
 
-**Do I need to restart after schema changes?** No — identifiers are validated against the live schema on every request.
+**Do I need to restart after schema changes?** No, identifiers are validated against the live schema on every request.
 
 **Can PGAutoPilot modify my database automatically?** Only through explicit tool calls; every write is deliberate, and dry-run-before-write is the default.
 
-**Does it work with Supabase?** Yes — use the Supabase connection string and `PGSSLMODE=require`.
+**Does it work with Supabase?** Yes, use the Supabase connection string and `PGSSLMODE=require`.
 
-**Does it require npm?** No — npm, the one-line installer, or the single-file bundle all work.
+**Does it require npm?** No, npm, the one-line installer, or the single-file bundle all work.
 
-**Does it support SSL?** Yes — auto-detected or via `PGSSLMODE`.
+**Does it support SSL?** Yes, auto-detected or via `PGSSLMODE`.
 
-**Can I disable writes entirely?** Yes — `pgautopilot --readonly`.
+**Can I disable writes entirely?** Yes, `pgautopilot --readonly`.
 
-**Can I expose it publicly?** No — designed for local/private network use; no auth layer or HTTP server.
+**Can I expose it publicly?** No, designed for local/private network use; no auth layer or HTTP server.
 
-**Is it safe for production?** Yes — every write path is guarded. See [Safety & Security](#safety--security).
+**Is it safe for production?** Yes, every write path is guarded. See [Safety & Security](#safety--security).
 
 ---
 

@@ -1,4 +1,4 @@
-# Database Migrations — NorthStar Dynamics Test Dataset
+# Database Migrations, NorthStar Dynamics Test Dataset
 
 The canonical test database for the PGAutoPilot dashboard. Always use these two
 files (in order) when setting up a database for manual testing, demoing, or
@@ -9,7 +9,7 @@ developing against the schema explorer / tables / SQL-editor features.
 | File                     | Version | Purpose                                                                                                                                                          |
 | ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `001_initial_schema.sql` | 1       | Drops all data tables (`DROP TABLE ... CASCADE`), then recreates tables, indexes, triggers, and the `set_updated_at()` helper. Safe to re-run for a clean slate. |
-| `002_seed_demo_data.sql` | 2       | Seeds a realistic multi-region dataset for the fictional company **NorthStar Dynamics**. Not idempotent — re-running violates unique constraints.                |
+| `002_seed_demo_data.sql` | 2       | Seeds a realistic multi-region dataset for the fictional company **NorthStar Dynamics**. Not idempotent, re-running violates unique constraints.                |
 
 Migration files follow the `NNN_name.sql` naming convention and are tracked in
 the `schema_migrations` table (`version`, `name`, `applied_at`), which the
@@ -18,11 +18,11 @@ dashboard reads to decide which migrations are pending.
 ## Requirements
 
 - PostgreSQL 12+ (uses UUIDs, `JSONB`, `GIN` indexes, `plpgsql` triggers, and
-  regex `CHECK` constraints — all stock PostgreSQL).
+  regex `CHECK` constraints, all stock PostgreSQL).
 
 ## Applying
 
-### Option A — `psql`
+### Option A, `psql`
 
 From this directory, in version order:
 
@@ -37,7 +37,7 @@ Or a single pass against a fresh database:
 psql "$DATABASE_URL" -f 001_initial_schema.sql -f 002_seed_demo_data.sql
 ```
 
-### Option B — Dashboard API
+### Option B, Dashboard API
 
 Start the dashboard API and use the migrations endpoints (the API refuses to
 apply when the server is in read-only mode):
@@ -91,7 +91,7 @@ curl -X POST http://localhost:3000/api/migrations/apply
 
 ## Constraints to Know When Writing Test Data
 
-- **User emails must end in `@northstardynamics.demo`** — a `CHECK` constraint
+- **User emails must end in `@northstardynamics.demo`**, a `CHECK` constraint
   on `users.email` rejects anything else. Customer emails use `.example` domains
   and are not subject to that check.
 - **Soft deletes**: every business table has a `deleted_at` column. Prefer
@@ -100,7 +100,7 @@ curl -X POST http://localhost:3000/api/migrations/apply
 - **`departments.head_user_id`** was added with a post-creation `ALTER TABLE`
   to break the circular `departments <-> users` reference; `002` back-fills it
   with `UPDATE` statements.
-- **`updated_at` is managed by triggers** (`set_updated_at()` on every table) —
+- **`updated_at` is managed by triggers** (`set_updated_at()` on every table),
   do not set it manually on `UPDATE`.
 - **Unique business keys**: `organizations` (none global), `roles.name`/`code`,
   `departments (organization_id, code)`, `users.email`, `customers.email`,

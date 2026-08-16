@@ -36,7 +36,7 @@
 ---
 
 The PGAutoPilot dashboard is a production-grade PostgreSQL management
-interface — a React + Vite + Tailwind CSS v4 app backed by a hardened Express
+interface, a React + Vite + Tailwind CSS v4 app backed by a hardened Express
 API. It's an isolated pnpm workspace that reuses the MCP server's safety
 layer (redaction, blocked tables, read-only mode, the dangerous-function
 gate) through an HTTP-friendly port of `packages/core`, so every action the
@@ -89,7 +89,7 @@ web/
   packages/config      shared tsconfig + eslint presets
 ```
 
-Dependency direction is strictly inward: `apps/* -> packages/*` — packages never depend on apps.
+Dependency direction is strictly inward: `apps/* -> packages/*`, packages never depend on apps.
 
 ---
 
@@ -110,7 +110,7 @@ Dependency direction is strictly inward: `apps/* -> packages/*` — packages nev
 
 ## Quick Start
 
-**1. Install** — `pnpm install`
+**1. Install** - `pnpm install`
 
 **2. Point it at your database:**
 
@@ -135,7 +135,7 @@ pnpm dev
 
 Starts the API (default `http://127.0.0.1:3000`) and the Vite dev server with hot reload, proxying `/api` to the backend.
 
-**4. Open the dashboard** — served by Vite in development. After `pnpm build`, the API also serves `apps/web/dist` directly, so the full app runs monolithically at the API port.
+**4. Open the dashboard** - served by Vite in development. After `pnpm build`, the API also serves `apps/web/dist` directly, so the full app runs monolithically at the API port.
 
 ---
 
@@ -211,11 +211,11 @@ Apply pending migrations through the UI, the API (`POST /api/migrations/apply`),
 
 ## Security
 
-- **Localhost-first** — the API binds to `127.0.0.1` by default; set `DASHBOARD_TOKEN` to require `Authorization: Bearer <token>` on all `/api/*` routes.
-- **Same safety model as the MCP server** — every tool call passes through `packages/core`: redaction, blocked tables, read-only mode, the raw-query gate.
-- **No CORS by default** — the web app is served same-origin through the Vite proxy; enable and constrain CORS explicitly only if a cross-origin deployment is needed.
-- **Masked errors** — production mode returns generic errors so schema details never leak.
-- **Rate limiting** — tool execution, migrations, and failed authentication are throttled when configured.
+- **Localhost-first:** the API binds to `127.0.0.1` by default; set `DASHBOARD_TOKEN` to require `Authorization: Bearer <token>` on all `/api/*` routes.
+- **Same safety model as the MCP server:** every tool call passes through `packages/core`: redaction, blocked tables, read-only mode, the raw-query gate.
+- **No CORS by default:** the web app is served same-origin through the Vite proxy; enable and constrain CORS explicitly only if a cross-origin deployment is needed.
+- **Masked errors:** production mode returns generic errors so schema details never leak.
+- **Rate limiting:** tool execution, migrations, and failed authentication are throttled when configured.
 
 ---
 
@@ -234,7 +234,7 @@ Apply pending migrations through the UI, the API (`POST /api/migrations/apply`),
 | `pnpm test`      | Unit tests across the workspace                                                                |
 | `pnpm format`    | Format all source with Prettier                                                                |
 
-**Verification gate** — run from `web/` before merging:
+**Verification gate** - run from `web/` before merging:
 
 ```bash
 pnpm -r typecheck
@@ -243,7 +243,7 @@ pnpm -r lint
 pnpm build
 ```
 
-**Branch strategy** — dashboard work happens on `main` (or short-lived feature branches merged back after the verification gate), like the rest of the repository. Stage deliberately (`git add <specific files>`), never `git add -A`. Nothing is pushed until tested and approved.
+**Branch strategy** - dashboard work happens on `main` (or short-lived feature branches merged back after the verification gate), like the rest of the repository. Stage deliberately (`git add <specific files>`), never `git add -A`. Nothing is pushed until tested and approved.
 
 ---
 

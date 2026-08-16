@@ -14,14 +14,14 @@
 
 **Model-agnostic PostgreSQL access for AI assistants, plus a hardened web dashboard.**
 
-<a href="https://github.com/sponsors/cyberreinxy"><iframe src="https://github.com/sponsors/cyberreinxy/button" title="Sponsor cyberreinxy" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe></a>
+[![Sponsor cyberreinxy](https://img.shields.io/badge/Sponsor-cyberreinxy-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/cyberreinxy)
 
 PGAutoPilot lets any AI assistant safely explore, query, and manage a
 PostgreSQL database in natural language through an MCP server, and gives you a
 full management UI through an optional dashboard. Both entry points share the
 **exact same safety model** (redaction, blocked tables, read-only mode, the
-dangerous-function gate), so every action — whether from an editor or the web
-UI — is subject to the same guarantees.
+dangerous-function gate), so every action, whether from an editor or the web
+UI, is subject to the same guarantees.
 
 ```text
 Model-agnostic  PostgreSQL-optimized  Safe writes  Read-only mode
@@ -64,10 +64,10 @@ Connection pool Production-ready     SSL          Schema inspection
 Most database MCP servers expose raw SQL directly and leave destructive
 operations largely unguarded. PGAutoPilot takes the opposite stance:
 
-- **Schema-aware** — every identifier is validated against your live database.
-- **Production-first** — every write path is guarded by multiple configurable safety layers.
-- **Model-agnostic** — works identically with Claude, GPT-4o, Gemini, DeepSeek, Copilot, and open-source models.
-- **Two surfaces, one safety model** — the MCP server and the dashboard share the same redaction, blocked-tables, and read-only guarantees.
+- **Schema-aware:** every identifier is validated against your live database.
+- **Production-first:** every write path is guarded by multiple configurable safety layers.
+- **Model-agnostic:** works identically with Claude, GPT-4o, Gemini, DeepSeek, Copilot, and open-source models.
+- **Two surfaces, one safety model:** the MCP server and the dashboard share the same redaction, blocked-tables, and read-only guarantees.
 
 ```text
 You: "Show me customers that spent more than $500."
@@ -80,14 +80,14 @@ You: "Show me customers that spent more than $500."
 
 ## Repository layout
 
-The repo is a monorepo with two independent halves — the **MCP server** and
-the **dashboard** — each with its own toolchain, kept separate but unified
+The repo is a monorepo with two independent halves, the **MCP server** and
+the **dashboard**, each with its own toolchain, kept separate but unified
 under one repo and one shared safety model.
 
 ```text
 root/
 │
-├─ server/                        MCP core — PostgreSQL MCP server (npm, single executable)
+├─ server/                        MCP core, PostgreSQL MCP server (npm, single executable)
 │  ├─ src/
 │  │  ├─ index.ts                 MCP server entry point / initialization
 │  │  ├─ config.ts                Env loading + validation
@@ -105,7 +105,7 @@ root/
 │  ├─ docker-compose.yml          PostgreSQL 16 + MCP server
 │  └─ package.json                npm package `pgautopilot`
 │
-└─ web/                           Dashboard — pnpm/Turborepo workspace
+└─ web/                           Dashboard, pnpm/Turborepo workspace
    ├─ apps/
    │  ├─ api/                     Express API (auth, tool gateway, schema, migrations, snapshots)
    │  └─ web/                     React + Vite + Tailwind v4 single-page app
@@ -119,13 +119,13 @@ root/
 
 **Two halves, one safety model.** The `web/` workspace is isolated (its own
 `pnpm-lock.yaml`, Turborepo, packages) and depends strictly inward
-(`apps/* -> packages/*` — packages never depend on apps). `web/packages/core`
+(`apps/* -> packages/*`; packages never depend on apps). `web/packages/core`
 is an HTTP-friendly port of the MCP core's safety layer (`server/src/safety.ts`),
 so both entry points enforce identical guarantees. A change to one safety layer
 **must** be mirrored in the other, or the two surfaces diverge.
 
 Each half has its own README stub pointing here, and each has its own
-verification gate — see [Development](#development) and
+verification gate, see [Development](#development) and
 [Verification before shipping](#verification-before-shipping).
 
 ---
@@ -155,7 +155,7 @@ same gatekeeping logic.
 npm install -g pgautopilot
 ```
 
-**No npm — one-line installer** (clones, adds to PATH; re-run to update):
+**No npm, one-line installer** (clones, adds to PATH; re-run to update):
 
 | Platform   | Command                                                                                       |
 | ---------- | --------------------------------------------------------------------------------------------- |
@@ -179,7 +179,7 @@ npm install -g pgautopilot
 pnpm install
 ```
 
-Installs are idempotent and signed — see [Software Signing](#software-signing).
+Installs are idempotent and signed; see [Software Signing](#software-signing).
 
 ---
 
@@ -193,7 +193,7 @@ Create a `.env` anywhere on your machine (PGAutoPilot finds it automatically):
 DATABASE_URL=postgresql://user:password@localhost:5432/yourdb
 ```
 
-Connect your AI assistant — identical config for VS Code, Cursor, Windsurf,
+Connect your AI assistant, identical config for VS Code, Cursor, Windsurf,
 Claude Desktop, Zed, JetBrains, Neovim, opencode, Cline, Kilo, Roo Code,
 Gemini CLI, Codex CLI, Copilot CLI, and more:
 
@@ -202,7 +202,7 @@ Gemini CLI, Codex CLI, Copilot CLI, and more:
 ```
 
 Ready-to-copy config files for every supported client live in
-[`server/config/`](server/config/) — each folder has a README showing where to
+[`server/config/`](server/config/), each folder has a README showing where to
 put the file in your project.
 
 Then just ask: _"Show me all tables."_ · _"How many users signed up this month?"_ ·
@@ -272,7 +272,7 @@ credential is the sole authentication boundary for the MCP server; the
 dashboard adds optional bearer-token auth and binds to `127.0.0.1` by default.
 
 The safety model is shared by both entry points (`server/src/safety.ts` and
-`web/packages/core/src/safety.ts`) — a change to one must be mirrored in the
+`web/packages/core/src/safety.ts`); a change to one must be mirrored in the
 other, or the two surfaces diverge.
 
 ### Safety features
@@ -309,7 +309,7 @@ write. Extend via `SENSITIVE_COLUMNS`.
 ### Least-privilege database role
 
 Do not connect with a superuser or the application's primary role. Create a
-dedicated role per connection mode and point `DATABASE_URL` at it — the Postgres
+dedicated role per connection mode and point `DATABASE_URL` at it. The Postgres
 role is the security boundary, not the client.
 
 ```sql
@@ -326,18 +326,18 @@ prefer `PGSSLMODE=verify-full`.
 
 ### Dashboard security
 
-- **Localhost-first** — the API binds to `127.0.0.1` by default; set `DASHBOARD_TOKEN` to require `Authorization: Bearer <token>` on all `/api/*` routes.
-- **Same safety model as the MCP server** — every tool call passes through `packages/core`.
-- **No CORS by default** — the web app is served same-origin through the Vite proxy.
-- **Masked errors** — production mode returns generic errors so schema details never leak.
-- **Rate limiting** — tool execution, migrations, and failed authentication are throttled when configured.
+- **Localhost-first:** the API binds to `127.0.0.1` by default; set `DASHBOARD_TOKEN` to require `Authorization: Bearer <token>` on all `/api/*` routes.
+- **Same safety model as the MCP server:** every tool call passes through `packages/core`.
+- **No CORS by default:** the web app is served same-origin through the Vite proxy.
+- **Masked errors:** production mode returns generic errors so schema details never leak.
+- **Rate limiting:** tool execution, migrations, and failed authentication are throttled when configured.
 
 ### Security
 
-- **Responsible disclosure** — report vulnerabilities privately via [GitHub Security Advisories](https://github.com/cyberreinxy/pgautopilot/security/advisories).
-- **Signed releases** — every release is SHA-256 checksummed and GPG-signed.
+- **Responsible disclosure:** report vulnerabilities privately via [GitHub Security Advisories](https://github.com/cyberreinxy/pgautopilot/security/advisories).
+- **Signed releases:** every release is SHA-256 checksummed and GPG-signed.
 - **Zero runtime dependencies** in the bundled MCP server build.
-- **Logging policy** — connection strings are never logged; per-request logs off in `--mode=production`.
+- **Logging policy:** connection strings are never logged; per-request logs off in `--mode=production`.
 
 ---
 
@@ -408,7 +408,7 @@ Tool:   db_delete_many(table="logs", where={"created_at":{"lt":"2025-01-01"}}, d
 ```
 
 Every write tool is dry-run capable, and every query produces the exact
-parameterized SQL that runs — nothing touches your database silently.
+parameterized SQL that runs, nothing touches your database silently.
 
 ---
 
@@ -447,7 +447,7 @@ Versioned SQL migrations live in `web/apps/api/migrations` (default
 Apply pending migrations through the UI, the API (`POST /api/migrations/apply`),
 or the migration runner in `packages/core`. In read-only mode, all apply
 endpoints are blocked. `001_initial_schema.sql` is idempotent; `002_seed_demo_data.sql`
-is not — never assume both are safely re-runnable.
+is not, so never assume both are safely re-runnable.
 
 ---
 
@@ -479,7 +479,7 @@ and manage it yourself with `psql` or pgAdmin.
 
 ### 2. Set the `postgres` password
 
-(Needed for TCP login; Windows/macOS set it at install time — skip to step 3):
+(Needed for TCP login; Windows/macOS set it at install time, so skip to step 3 if set):
 
 ```bash
 sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'mypass';"
@@ -501,7 +501,7 @@ DATABASE_URL=postgresql://postgres:mypass@localhost:5432/mydb
 
 New server: Host `localhost` · Port `5432` · Maintenance DB `postgres` · Username `postgres` · your password. Browse tables and run queries while PGAutoPilot works against the same database.
 
-> **Backups** need `pg_dump` — bundled with PostgreSQL on Windows; install the client tools (`postgresql-client` / `libpq`) on macOS/Linux. See [Troubleshooting](#troubleshooting).
+> **Backups** need `pg_dump`, bundled with PostgreSQL on Windows; install the client tools (`postgresql-client` / `libpq`) on macOS/Linux. See [Troubleshooting](#troubleshooting).
 >
 > **Tip:** for production, create a dedicated least-privilege role for PGAutoPilot (see [Safety & Security](#safety--security)) and keep your `postgres` login for pgAdmin/psql.
 
@@ -535,7 +535,7 @@ pgautopilot --readonly --mode=production
 | `PG_SCHEMAS`              | `public`      | PostgreSQL schemas to introspect (comma-separated)       |
 | `NODE_ENV`                | `development` | `production` disables per-request logging                 |
 
-### Dashboard — API (`web/apps/api`)
+### Dashboard API (`web/apps/api`)
 
 | Variable                    | Default        | What it does                                              |
 | --------------------------- | -------------- | --------------------------------------------------------- |
@@ -561,7 +561,7 @@ pgautopilot --readonly --mode=production
 | `AUTH_RATE_LIMIT_WINDOW_MS` | `60000`        | Failed-auth throttle window                               |
 | `TRUST_PROXY`               | -              | Proxy trust when deployed behind a reverse proxy          |
 
-### Dashboard — Web (`web/apps/web`)
+### Dashboard Web (`web/apps/web`)
 
 | Variable               | Default | What it does                                             |
 | ---------------------- | ------- | -------------------------------------------------------- |
@@ -580,15 +580,15 @@ pgautopilot --readonly --mode=production
 | AWS RDS              | `postgresql://admin:pass@xxx.us-east-1.rds.amazonaws.com:5432/mydb` |
 | Render               | `postgresql://user:pass@host.render.com:5432/mydb`                  |
 
-**Cloud SSL:** cloud providers (Neon, Supabase, RDS, Render) need SSL — set
+**Cloud SSL:** cloud providers (Neon, Supabase, RDS, Render) need SSL; set
 `PGSSLMODE=require` (stronger: `verify-full`); auto-detected for most providers.
 
 ---
 
 ## Performance
 
-PGAutoPilot adds minimal overhead over a direct connection — latency depends on
-your database and network — with a zero-dependency single-file executable for
+PGAutoPilot adds minimal overhead over a direct connection, latency depends on
+your database and network, with a zero-dependency single-file executable for
 the MCP server and configurable pool sizes and statement timeouts. Full benchmarks
 will be published once the project reaches a stable release.
 
@@ -631,21 +631,21 @@ installation aborts. Bypass with `--skip-verify` (not recommended).
 
 ## FAQ
 
-**Do I need to restart after schema changes?** No — identifiers are validated against the live schema on every request.
+**Do I need to restart after schema changes?** No, identifiers are validated against the live schema on every request.
 
 **Can PGAutoPilot modify my database automatically?** Only through explicit tool calls; every write is deliberate, and dry-run-before-write is the default.
 
-**Does it work with Supabase?** Yes — use the Supabase connection string and `PGSSLMODE=require`.
+**Does it work with Supabase?** Yes, use the Supabase connection string and `PGSSLMODE=require`.
 
-**Does it require npm?** No — npm, the one-line installer, or the single-file bundle all work.
+**Does it require npm?** No, npm, the one-line installer, or the single-file bundle all work.
 
-**Does it support SSL?** Yes — auto-detected or via `PGSSLMODE`.
+**Does it support SSL?** Yes, auto-detected or via `PGSSLMODE`.
 
-**Can I disable writes entirely?** Yes — `pgautopilot --readonly`.
+**Can I disable writes entirely?** Yes, `pgautopilot --readonly`.
 
-**Can I expose it publicly?** No — the MCP server is designed for local/private network use (no auth layer or HTTP server); the dashboard binds to `127.0.0.1` by default.
+**Can I expose it publicly?** No, the MCP server is designed for local/private network use (no auth layer or HTTP server); the dashboard binds to `127.0.0.1` by default.
 
-**Is it safe for production?** Yes — every write path is guarded. See [Safety & Security](#safety--security).
+**Is it safe for production?** Yes, every write path is guarded. See [Safety & Security](#safety--security).
 
 ---
 
@@ -664,7 +664,7 @@ installation aborts. Bypass with `--skip-verify` (not recommended).
 
 ## Development
 
-### MCP server (`server/`) — source layout
+### MCP server (`server/`), source layout
 
 ```text
 server/src/
