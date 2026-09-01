@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2 (2026-09-01)
+
+- **Fixed:** bump `zod` to `^3.25.28 || ^4.0.0` to satisfy `@modelcontextprotocol/sdk@1.30.0` (`zod@"^3.25 || ^4.0"`) and `zod-to-json-schema@3.25.2` (`zod@"^3.25.28 || ^4"`) peers — removes `pnpm install` unmet peer `found 3.23.8` warning when consumed by projects on `zod@4.4.3` (e.g. `StudentsManagemenSystem`).
+
 ## 2.2.1 (2026-08-13)
 
 - **Added:** `glama.json` at the repo root to claim the MCP server listing on Glama.
