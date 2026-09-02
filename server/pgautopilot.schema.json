@@ -117,20 +117,21 @@
   },
   "examples": [
     {
-      "databases": {
-        "users_db": {
-          "url": "postgresql://user:pass@localhost:5432/users",
-          "readonly": false
-        },
-        "analytics": {
-          "url": "postgresql://user:pass@localhost:5432/analytics",
-          "readonly": true,
-          "schemas": ["public", "reporting"]
-        }
-      },
       "defaults": {
         "readonly": true,
         "statement_timeout_ms": 10000
+      },
+      "databases": {
+        "app_production": {
+          "url": "$APP_DATABASE_URL",
+          "readonly": false,
+          "blocked_tables": ["schema_migrations"]
+        },
+        "analytics": {
+          "url": "$ANALYTICS_DATABASE_URL",
+          "readonly": true,
+          "schemas": ["public", "reporting"]
+        }
       }
     }
   ]

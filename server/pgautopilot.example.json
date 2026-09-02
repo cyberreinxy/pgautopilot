@@ -1,26 +1,33 @@
 {
-  "databases": {
-    "users_db": {
-      "url": "postgresql://user:password@localhost:5432/users",
-      "readonly": false,
-      "schemas": ["public"],
-      "statement_timeout_ms": 10000
-    },
-    "analytics": {
-      "url": "postgresql://user:password@localhost:5432/analytics",
-      "readonly": true,
-      "schemas": ["public", "reporting"],
-      "statement_timeout_ms": 30000
-    },
-    "staging": {
-      "url": "$STAGING_DATABASE_URL",
-      "readonly": false
-    }
-  },
   "defaults": {
     "readonly": true,
     "schemas": ["public"],
     "statement_timeout_ms": 10000,
     "pool_max": 5
+  },
+  "databases": {
+    "app_production": {
+      "url": "$APP_DATABASE_URL",
+      "readonly": false,
+      "schemas": ["public", "auth"],
+      "blocked_tables": ["schema_migrations", "ar_internal_metadata"],
+      "sensitive_columns": ["password_digest", "reset_token"]
+    },
+    "app_staging": {
+      "url": "$STAGING_DATABASE_URL",
+      "readonly": false
+    },
+    "analytics": {
+      "url": "$ANALYTICS_DATABASE_URL",
+      "readonly": true,
+      "schemas": ["public", "reporting", "warehouse"],
+      "statement_timeout_ms": 30000
+    },
+    "audit_log": {
+      "url": "$AUDIT_DATABASE_URL",
+      "readonly": true,
+      "schemas": ["audit"],
+      "blocked_tables": ["audit_events"]
+    }
   }
 }
