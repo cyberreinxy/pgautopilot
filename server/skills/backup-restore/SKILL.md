@@ -12,7 +12,7 @@ description: >-
   **Keywords:** backup, restore, dump, export, import, pg_dump, SQL, snapshot, data loss, recovery, rollback
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Backup & Restore with PGAutoPilot

@@ -15,7 +15,7 @@ description: >-
   **Keywords:** PostgreSQL, Postgres, SQL, database, table, query, schema, index, constraint, migration, backup, PGAutoPilot, MCP
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # PGAutoPilot — PostgreSQL AI Assistant

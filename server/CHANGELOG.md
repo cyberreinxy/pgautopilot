@@ -1,5 +1,99 @@
 # Changelog
 
+## 2.4.0 (2026-09-02)
+
+### New Tools
+
+- **Added:** `db_explain` — runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` on SELECT
+  queries and auto-analyzes the plan for: sequential scans on large tables, low
+  selectivity filters, external sorts, high-cost hash joins, low buffer cache hit
+  rate, and temp file usage. No extensions required.
+
+### Expanded Health Checks
+
+- **Added:** Buffer cache hit rate check — warns when below 90%, reports blks_hit
+  and blks_read for diagnosis.
+- **Added:** Constraint health check — finds invalid constraints (e.g., after failed
+  recovery or interrupted `ALTER TABLE`).
+- **Added:** Per-database health checks in multi-DB mode — runs full vacuum,
+  replication, indexes, sequences, buffer cache, and constraint checks per database
+  (not just `SELECT 1`).
+- **Added:** PostgreSQL version detection at startup and per-database in multi-DB
+  mode. Version included in `db_health` results and `pgautopilot://status` resource.
+
+### MCP Resources & Prompts
+
+- **Added:** `pgautopilot://status` resource — server name, version, mode, PostgreSQL
+  version, database list with connection status.
+- **Added:** `pgautopilot://schema` resource — points to `db_schema` tool.
+- **Added:** `explore-database` prompt — guided workflow: overview → schema →
+  relationships → summary.
+- **Added:** `diagnose-query` prompt — guided workflow: get query → db_explain →
+  analyze plan → suggest fixes.
+
+### HTTP Transport
+
+- **Added:** `--transport=http --port=3000` flag for Streamable HTTP mode. Each
+  session gets its own McpServer instance. CORS headers for browser access. `/health`
+  endpoint for monitoring.
+
+### Project-Scoped Setup
+
+- **Fixed:** All 13 MCP configs now include `cwd: "${workspaceFolder}"` so the
+  server starts in the project root where `.env` and `pgautopilot.json` live.
+- **Fixed:** Postinstall script generates all configs with `cwd`.
+- **Changed:** README Quick Start rewritten as 4-step project-scoped walkthrough.
+  Removed global install, one-line installer, and download-and-run sections.
+
+### Bug Fixes
+
+- **Fixed:** `ALLOW_WRITES` env var and `--readonly` flag now correctly propagate
+  to multi-database defaults. Previously, `defaults.readonly` was hardcoded to `true`
+  and the env/flag was silently ignored.
+
+### Type Safety
+
+- **Added:** `safeQueryOne<T>` helper — eliminates `[0]` array indexing with
+  `noUncheckedIndexedAccess`. Returns `T | null` with proper runtime narrowing.
+- **Added:** `getPgVersion()` helper — centralized PostgreSQL version detection,
+  replaces 4 scattered `as string` casts with a single typed function.
+- **Removed:** 2 unnecessary `as unknown as` casts in `dbDiagnostics.ts` — `Pool`
+  already extends `EventEmitter` and has `totalCount`/`idleCount`/`waitingCount`.
+- **Improved:** All health check queries now use typed interfaces (`VacuumRow`,
+  `ReplicationRow`, `CacheRow`, `ConstraintRow`, etc.) instead of `unknown[]`.
+
+### Agent Skills
+
+- **Added:** 7 agent skills following the Agent Skills Specification (`SKILL.md`):
+  `pgautopilot`, `query-optimization`, `database-health`, `safe-writes`,
+  `multi-database`, `connection-troubleshooting`, `backup-restore`.
+- **Added:** `skills.json` manifest and `merge-skills-lock.mjs` script for smart
+  merging into existing `skills-lock.json` files (matches `npx skills` format).
+- **Added:** Postinstall auto-merges skills into project lock file.
+
+### Tool Definitions
+
+- **Improved:** All 18 tool descriptions rewritten for Glama TDQS scoring — expanded
+  with Purpose Clarity, Usage Guidelines, Behavioral Transparency, Parameter
+  Semantics, and Contextual Completeness.
+
+### Documentation
+
+- **Added:** `docs/COMPETITIVE_ANALYSIS.md` — deep analysis of crystaldba/postgres-mcp,
+  timescale/pg-aiguide, and pgEdge/pgedge-postgres-mcp.
+- **Updated:** `pgautopilot.example.json` — realistic multi-DB config with
+  `app_production`, `analytics`, `app_staging`, `audit_log` databases.
+- **Updated:** `pgautopilot.schema.json` — updated examples to match.
+- **Added:** `glama.json` for MCP server listing ownership.
+
+### Tests
+
+- **Added:** Tests for `db_explain` — rejects non-SELECT, returns plan with analysis,
+  strips semicolons, detects hash joins.
+- **Added:** Tests for expanded `db_health` — TXID wraparound, unused indexes,
+  sequences, replica lag, buffer cache (high/low/empty), constraints.
+- **Total:** 137 tests, all passing.
+
 ## 2.3.0 (2026-09-02)
 
 ### Multi-Database Support

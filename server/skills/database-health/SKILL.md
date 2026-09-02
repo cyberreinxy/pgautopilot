@@ -15,7 +15,7 @@ description: >-
   **Keywords:** health, vacuum, replication, lag, sequence, index, connection, pool, uptime, monitoring, production, TXID, wraparound, bloat, dead tuples
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Database Health Monitoring with PGAutoPilot

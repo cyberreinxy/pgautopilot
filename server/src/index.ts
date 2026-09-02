@@ -95,7 +95,7 @@ async function main() {
         const s = new McpServer({
           name: "pgautopilot",
           title: "PGAutoPilot -- PostgreSQL AI Assistant",
-          version: "2.3.0",
+          version: "2.4.0",
         });
         await setupServer(s, argv);
         return { server: s, cleanup: async () => { await s.close(); } };
@@ -109,14 +109,14 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.3.0",
+    version: "2.4.0",
   });
 
   await setupServer(server, argv);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.3.0 ready");
+  log.info("PGAutoPilot v2.4.0 ready");
 }
 
 async function setupServer(server: McpServer, argv: string[]) {
@@ -223,7 +223,7 @@ async function setupServer(server: McpServer, argv: string[]) {
           mimeType: "application/json",
           text: JSON.stringify({
             name: "pgautopilot",
-            version: "2.3.0",
+            version: "2.4.0",
             postgresqlVersion: pgVersion,
             mode: safety.mode,
             readonly: safety.readonly,
@@ -270,7 +270,7 @@ async function setupServer(server: McpServer, argv: string[]) {
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    log.info("PGAutoPilot v2.3.0 ready");
+    log.info("PGAutoPilot v2.4.0 ready");
     log.info(`Connection: ${connectionSummary(config.poolConfig)}`);
     log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
     if (safety.blockedTables.size > 0) {
@@ -291,7 +291,7 @@ async function setupServer(server: McpServer, argv: string[]) {
   const resolved = configMode.resolved;
   const multiDb = resolved.multiDbConfig!;
 
-  log.info("PGAutoPilot v2.3.0 starting in multi-database mode");
+  log.info("PGAutoPilot v2.4.0 starting in multi-database mode");
   log.info(`Databases configured: ${Object.keys(multiDb.databases).join(", ")}`);
 
   const manager = new ConnectionManager();
@@ -442,7 +442,7 @@ async function setupServer(server: McpServer, argv: string[]) {
         mimeType: "application/json",
         text: JSON.stringify({
           name: "pgautopilot",
-          version: "2.3.0",
+          version: "2.4.0",
           postgresqlVersion: pgVersion,
           mode: "multi-database",
           defaultDatabase: manager.getDefaultName(),

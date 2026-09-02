@@ -13,7 +13,7 @@ description: >-
   **Keywords:** multi-database, database, switch, list, staging, production, analytics, cross-database, connection, pgautopilot.json
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Multi-Database with PGAutoPilot

@@ -12,7 +12,7 @@ description: >-
   **Keywords:** insert, create, update, delete, upsert, write, bulk, batch, dry run, confirm, safe, destructive, backup
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Safe Write Patterns with PGAutoPilot

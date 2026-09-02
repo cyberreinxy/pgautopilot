@@ -13,7 +13,7 @@ description: >-
   **Keywords:** connection, connect, refused, timeout, unreachable, URL, hostname, port, SSL, authentication, password, pg_hba, pool, health
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Connection Troubleshooting with PGAutoPilot

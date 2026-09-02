@@ -14,7 +14,7 @@ description: >-
   **Keywords:** slow query, performance, EXPLAIN, ANALYZE, execution plan, index, optimization, bottleneck, latency, sequential scan, hash join, sort, cost
 metadata:
   author: cyberreinxy
-  version: "2.3.0"
+  version: "2.4.0"
 ---
 
 # Query Optimization with PGAutoPilot
