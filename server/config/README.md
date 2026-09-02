@@ -40,6 +40,28 @@ client expects it, and customize paths to your project.
 - **From source (development):** `npx tsx src/index.ts` with
   `cwd: "<repo>/server"`. Tracks local code changes.
 
+## Multi-Database Mode
+
+PGAutoPilot supports connecting to multiple PostgreSQL databases. Create a
+`pgautopilot.json` in your project root:
+
+```json
+{
+  "databases": {
+    "users_db": { "url": "postgresql://..." },
+    "analytics": { "url": "$ANALYTICS_URL", "readonly": true }
+  }
+}
+```
+
+Then use the `database` parameter on any tool to target a specific database:
+- `db_list_databases` — discover available databases
+- `db_use_database` — switch the default at runtime
+- `db_health` — check all database connections
+- Any tool with `database: "analytics"` — query that specific database
+
+Full guide: [`docs/MULTI-DATABASE.md`](../docs/MULTI-DATABASE.md)
+
 ## Customizing
 
 - **Server name:** every snippet uses `pgautopilot`; rename it in one place
@@ -49,8 +71,9 @@ client expects it, and customize paths to your project.
 - **Permissions:** `autoApprove` / `alwaysAllow` are left empty on purpose.
   Every write tool still asks for confirmation. Add specific safe tools only
   if you want to skip prompts.
-- **Environment:** secrets go in `env` blocks or the client's `.env`; never
-  hardcode them in committed configs.
+- **Environment:** PGAutoPilot reads `DATABASE_URL` from `.env` files. For
+  IDEs that don't inherit shell env vars, set `DATABASE_URL` in the `.env`
+  file in your project root (PGAutoPilot finds it automatically).
 
 ## Installer
 

@@ -63,7 +63,34 @@ describe("writeEditorConfig", () => {
         );
         writeEditorConfig(file, "mcpServers", PG_ENTRY);
         const parsed = JSON.parse(readFileSync(file, "utf-8"));
-        expect(parsed.mcpServers.pgautopilot).toEqual(PG_ENTRY);
+        // Deep merge preserves existing props, updates with new entry
+        expect(parsed.mcpServers.pgautopilot.command).toBe(PG_ENTRY.command);
+        expect(parsed.mcpServers.pgautopilot.args).toEqual(PG_ENTRY.args);
+    });
+
+    it("preserves user customizations when merging", () => {
+        const file = join(tempDir(), "mcp.json");
+        writeFileSync(
+            file,
+            JSON.stringify({
+                mcpServers: {
+                    pgautopilot: {
+                        command: "npx",
+                        args: ["pgautopilot"],
+                        env: { DATABASE_URL: "postgresql://custom" },
+                        disabled: false,
+                    },
+                },
+            }),
+        );
+        writeEditorConfig(file, "mcpServers", PG_ENTRY);
+        const parsed = JSON.parse(readFileSync(file, "utf-8"));
+        // User's env and disabled settings are preserved
+        expect(parsed.mcpServers.pgautopilot.env).toEqual({ DATABASE_URL: "postgresql://custom" });
+        expect(parsed.mcpServers.pgautopilot.disabled).toBe(false);
+        // Entry props are updated
+        expect(parsed.mcpServers.pgautopilot.command).toBe(PG_ENTRY.command);
+        expect(parsed.mcpServers.pgautopilot.args).toEqual(PG_ENTRY.args);
     });
 });
 

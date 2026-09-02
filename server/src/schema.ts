@@ -38,18 +38,28 @@ interface SchemaCache {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-let cache: SchemaCache | null = null;
-let schemas: string[] = ["public"];
+const schemaCache = new WeakMap<Pool, SchemaCache>();
+const countCache = new WeakMap<Pool, Map<string, { count: number | null; at: number }>>();
+const schemasMap = new WeakMap<Pool, string[]>();
 
-export function setSchemas(next: string[]): void {
-  schemas = next.length > 0 ? next : ["public"];
+// ---------------------------------------------------------------------------
+// Per-pool schema list management
+// ---------------------------------------------------------------------------
+
+export function setSchemas(pool: Pool, next: string[]): void {
+  schemasMap.set(pool, next.length > 0 ? next : ["public"]);
 }
 
-export function getSchemas(): string[] {
-  return schemas;
+export function getSchemas(pool: Pool): string[] {
+  return schemasMap.get(pool) ?? ["public"];
 }
+
+// ---------------------------------------------------------------------------
+// Schema introspection (per-pool cache)
+// ---------------------------------------------------------------------------
 
 async function fetchTables(pool: Pool): Promise<{ schema: string; name: string }[]> {
+  const schemas = getSchemas(pool);
   const result = await pool.query<{ table_schema: string; table_name: string }>(
     `SELECT table_schema, table_name FROM information_schema.tables
      WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
@@ -181,17 +191,20 @@ async function loadSchema(pool: Pool): Promise<TableSchema[]> {
 }
 
 export async function getSchema(pool: Pool, forceRefresh = false): Promise<TableSchema[]> {
-  if (!forceRefresh && cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return cache.tables;
+  if (!forceRefresh) {
+    const cached = schemaCache.get(pool);
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+      return cached.tables;
+    }
   }
   const tables = await loadSchema(pool);
-  cache = { tables, at: Date.now() };
+  schemaCache.set(pool, { tables, at: Date.now() });
   return tables;
 }
 
-export function invalidateSchemaCache(): void {
-  cache = null;
-  countCache.clear();
+export function invalidateSchemaCache(pool: Pool): void {
+  schemaCache.delete(pool);
+  countCache.delete(pool);
 }
 
 export interface RowCount {
@@ -200,7 +213,6 @@ export interface RowCount {
 }
 
 const COUNT_CACHE_TTL_MS = 5 * 60 * 1000;
-const countCache = new Map<string, { count: number | null; at: number }>();
 
 export async function getOverviewRowCounts(
   pool: Pool,
@@ -208,6 +220,8 @@ export async function getOverviewRowCounts(
 ): Promise<Map<string, RowCount>> {
   const result = new Map<string, RowCount>();
   if (tables.length === 0) return result;
+
+  const schemas = getSchemas(pool);
 
   const estimateResult = await pool.query<{
     nspname: string;
@@ -224,6 +238,12 @@ export async function getOverviewRowCounts(
     estimateResult.rows.map((r) => [`${r.nspname}.${r.relname}`, Number(r.estimate)]),
   );
 
+  let poolCountCache = countCache.get(pool);
+  if (!poolCountCache) {
+    poolCountCache = new Map();
+    countCache.set(pool, poolCountCache);
+  }
+
   await Promise.all(
     tables.map(async (t) => {
       const key = `${t.schema}.${t.name}`;
@@ -232,7 +252,7 @@ export async function getOverviewRowCounts(
         result.set(key, { count: estimate, exact: false });
         return;
       }
-      const cached = countCache.get(key);
+      const cached = poolCountCache!.get(key);
       if (cached && Date.now() - cached.at < COUNT_CACHE_TTL_MS) {
         result.set(key, { count: cached.count, exact: cached.count !== null });
         return;
@@ -246,7 +266,7 @@ export async function getOverviewRowCounts(
       } catch {
         exact = null;
       }
-      countCache.set(key, { count: exact, at: Date.now() });
+      poolCountCache!.set(key, { count: exact, at: Date.now() });
       result.set(key, { count: exact, exact: exact !== null });
     }),
   );
@@ -254,40 +274,41 @@ export async function getOverviewRowCounts(
   return result;
 }
 
-function assertLoadable(table: TableSchema): TableSchema {
+function assertLoadable(schemas: string[], table: TableSchema): TableSchema {
   if (table.loadError) {
     throw new Error(
-      `Table "${tableDisplayName(table.schema, table.name)}" could not be fully introspected: ${table.loadError}`,
+      `Table "${tableDisplayName(schemas, table.schema, table.name)}" could not be fully introspected: ${table.loadError}`,
     );
   }
   return table;
 }
 
-export function tableDisplayName(schema: string, name: string): string {
+export function tableDisplayName(schemas: string[], schema: string, name: string): string {
   return schemas.length === 1 && schemas[0] === "public" ? name : `${schema}.${name}`;
 }
 
 export async function resolveTableName(pool: Pool, input: string): Promise<TableSchema> {
   const tables = await getSchema(pool);
+  const schemas = getSchemas(pool);
 
   const exactQualified = tables.filter((t) => `${t.schema}.${t.name}` === input);
   if (exactQualified.length > 1) {
     throw new Error(
-      `Table name "${input}" is ambiguous (${exactQualified.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
+      `Table name "${input}" is ambiguous (${exactQualified.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
     );
   }
   const exact = exactQualified[0];
-  if (exact) return assertLoadable(exact);
+  if (exact) return assertLoadable(schemas, exact);
 
   const lower = input.toLowerCase();
   const matches = tables.filter(
     (t) => t.name.toLowerCase() === lower || `${t.schema}.${t.name}`.toLowerCase() === lower,
   );
   const unique = matches[0];
-  if (unique && matches.length === 1) return assertLoadable(unique);
+  if (unique && matches.length === 1) return assertLoadable(schemas, unique);
   if (matches.length > 1) {
     throw new Error(
-      `Table name "${input}" is ambiguous (${matches.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
+      `Table name "${input}" is ambiguous (${matches.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`,
     );
   }
 
@@ -298,23 +319,24 @@ export async function resolveTableName(pool: Pool, input: string): Promise<Table
         t.name.toLowerCase().includes(lower),
     )
     .slice(0, 3)
-    .map((t) => tableDisplayName(t.schema, t.name));
+    .map((t) => tableDisplayName(schemas, t.schema, t.name));
   const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
   throw new Error(
-    `Table "${input}" not found. Available: ${tables.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}.${hint}`,
+    `Table "${input}" not found. Available: ${tables.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}.${hint}`,
   );
 }
 
-export function schemaToText(tables: TableSchema[]): string {
+export function schemaToText(pool: Pool, tables: TableSchema[]): string {
+  const schemas = getSchemas(pool);
   const lines = ["DATABASE SCHEMA", "===============", ""];
   for (const table of tables) {
-    lines.push(`[TABLE] ${tableDisplayName(table.schema, table.name)}`);
+    lines.push(`[TABLE] ${tableDisplayName(schemas, table.schema, table.name)}`);
     for (const col of table.columns) {
       const badges: string[] = [];
       if (col.isPrimaryKey) badges.push("PK");
       if (!col.nullable && !col.isPrimaryKey) badges.push("required");
       const fk = table.foreignKeys.find((f) => f.column === col.name);
-      if (fk) badges.push(`-> ${referenceDisplay(fk)}`);
+      if (fk) badges.push(`-> ${referenceDisplay(schemas, fk)}`);
       const badge = badges.length ? ` [${badges.join(", ")}]` : "";
       lines.push(`  - ${col.name}: ${col.dataType}${badge}`);
     }
@@ -323,29 +345,30 @@ export function schemaToText(tables: TableSchema[]): string {
   return lines.join("\n");
 }
 
-function referenceDisplay(fk: ForeignKeyInfo): string {
+function referenceDisplay(schemas: string[], fk: ForeignKeyInfo): string {
   const table =
     schemas.length > 1 ? `${fk.referencesSchema}.${fk.referencesTable}` : fk.referencesTable;
   return `${table}.${fk.referencesColumn}`;
 }
 
-function semanticRelationLabel(fk: ForeignKeyInfo): string {
+function semanticRelationLabel(schemas: string[], fk: ForeignKeyInfo): string {
   const constraint = fk.constraintName ?? "";
   if (constraint === "" || /_fkey$/i.test(constraint)) {
-    return `${fk.column} -> ${referenceDisplay(fk)}`;
+    return `${fk.column} -> ${referenceDisplay(schemas, fk)}`;
   }
-  return `${fk.column} -> ${referenceDisplay(fk)} [${constraint}]`;
+  return `${fk.column} -> ${referenceDisplay(schemas, fk)} [${constraint}]`;
 }
 
-export function relationsToText(tables: TableSchema[]): string {
+export function relationsToText(pool: Pool, tables: TableSchema[]): string {
+  const schemas = getSchemas(pool);
   const lines = ["RELATIONSHIPS", "============", ""];
   let hasAny = false;
   for (const table of tables) {
     if (table.foreignKeys.length === 0) continue;
     hasAny = true;
-    lines.push(tableDisplayName(table.schema, table.name));
+    lines.push(tableDisplayName(schemas, table.schema, table.name));
     for (const fk of table.foreignKeys) {
-      lines.push(`  -> ${semanticRelationLabel(fk)}`);
+      lines.push(`  -> ${semanticRelationLabel(schemas, fk)}`);
     }
     lines.push("");
   }
@@ -362,6 +385,7 @@ export interface TableStats {
 }
 
 export async function getTableStats(pool: Pool, table: TableSchema): Promise<TableStats> {
+  const schemas = getSchemas(pool);
   const [sizeResult, countResult, indexResult] = await Promise.all([
     pool.query<{ size: string }>(
       `SELECT pg_size_pretty(pg_total_relation_size($1::regclass)) AS size`,
@@ -391,7 +415,7 @@ export async function getTableStats(pool: Pool, table: TableSchema): Promise<Tab
   });
 
   return {
-    table: tableDisplayName(table.schema, table.name),
+    table: tableDisplayName(schemas, table.schema, table.name),
     approxRowCount: Math.max(0, Number(countResult.rows[0]?.estimate ?? 0)),
     columns: table.columns,
     foreignKeys: table.foreignKeys,

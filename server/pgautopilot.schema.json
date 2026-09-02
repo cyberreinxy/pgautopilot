@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/cyberreinxy/pgautopilot/pgautopilot.schema.json",
+  "title": "PGAutoPilot Multi-Database Configuration",
+  "description": "Configuration file for PGAutoPilot multi-database support. Place as pgautopilot.json in your project root.",
+  "type": "object",
+  "required": ["databases"],
+  "additionalProperties": false,
+  "properties": {
+    "databases": {
+      "type": "object",
+      "description": "Map of named database connections. Each key is a database name.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/definitions/databaseEntry"
+      },
+      "propertyNames": {
+        "pattern": "^[a-zA-Z_][a-zA-Z0-9_-]*$",
+        "description": "Database names must start with a letter or underscore and contain only letters, digits, underscores, or hyphens."
+      }
+    },
+    "defaults": {
+      "$ref": "#/definitions/defaults",
+      "description": "Global defaults applied to all databases. Per-database values override these."
+    }
+  },
+  "definitions": {
+    "databaseEntry": {
+      "type": "object",
+      "description": "Configuration for a single database connection.",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "PostgreSQL connection string. Supports $VAR and ${VAR} environment variable interpolation.",
+          "examples": [
+            "postgresql://user:password@localhost:5432/mydb",
+            "$DATABASE_URL",
+            "postgresql://${DB_USER}:${DB_PASS}@host:5432/db"
+          ]
+        },
+        "readonly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Block all write operations to this database."
+        },
+        "schemas": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["public"],
+          "description": "PostgreSQL schemas to introspect.",
+          "examples": [["public"], ["public", "auth"]]
+        },
+        "blocked_tables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Table names that cannot be written to via MCP."
+        },
+        "sensitive_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra column names to redact on read and strip on write."
+        },
+        "high_risk_tables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Table names that warn but allow writes (defense in depth)."
+        },
+        "statement_timeout_ms": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1,
+          "description": "Maximum time in milliseconds for a single query."
+        },
+        "pool_max": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Maximum number of connections in the pool."
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Global defaults applied to all databases unless overridden.",
+      "additionalProperties": false,
+      "properties": {
+        "readonly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Default read-only mode for all databases."
+        },
+        "schemas": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["public"],
+          "description": "Default schemas to introspect."
+        },
+        "statement_timeout_ms": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1,
+          "description": "Default query timeout (ms)."
+        },
+        "pool_max": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Default max connections per pool."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "databases": {
+        "users_db": {
+          "url": "postgresql://user:pass@localhost:5432/users",
+          "readonly": false
+        },
+        "analytics": {
+          "url": "postgresql://user:pass@localhost:5432/analytics",
+          "readonly": true,
+          "schemas": ["public", "reporting"]
+        }
+      },
+      "defaults": {
+        "readonly": true,
+        "statement_timeout_ms": 10000
+      }
+    }
+  ]
+}

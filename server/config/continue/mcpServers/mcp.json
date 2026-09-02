@@ -4,8 +4,7 @@
       "command": "npx",
       "args": [
         "pgautopilot"
-      ],
-      "env": {}
+      ]
     }
   }
 }

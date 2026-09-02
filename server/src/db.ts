@@ -24,7 +24,8 @@ export async function waitForConnection(
     } catch (err) {
       lastError = err;
       if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const backoff = delayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
       }
     }
   }

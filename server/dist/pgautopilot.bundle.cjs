@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PGAutoPilot v2.2.2 — self-contained, no npm needed
+// PGAutoPilot v2.3.0 — self-contained, no npm needed
 
 "use strict";
 var __create = Object.create;
@@ -2987,7 +2987,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve3.call(this, root, ref);
+      let _sch = resolve4.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3014,7 +3014,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve3(root, ref) {
+    function resolve4(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3645,7 +3645,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve3(baseURI, relativeURI, options) {
+    function resolve4(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -3929,7 +3929,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve3,
+      resolve: resolve4,
       resolveComponent,
       equal,
       serialize,
@@ -4366,15 +4366,15 @@ var require_core = __commonJS({
         }
         return metaSchema;
       }
-      _removeAllSchemas(schemas2, regex) {
-        for (const keyRef in schemas2) {
-          const sch = schemas2[keyRef];
+      _removeAllSchemas(schemas, regex) {
+        for (const keyRef in schemas) {
+          const sch = schemas[keyRef];
           if (!regex || regex.test(keyRef)) {
             if (typeof sch == "string") {
-              delete schemas2[keyRef];
+              delete schemas[keyRef];
             } else if (sch && !sch.meta) {
               this._cache.delete(sch.schema);
-              delete schemas2[keyRef];
+              delete schemas[keyRef];
             }
           }
         }
@@ -9720,7 +9720,7 @@ var require_compile2 = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve3.call(this, root, ref);
+      let _sch = resolve4.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -9747,7 +9747,7 @@ var require_compile2 = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve3(root, ref) {
+    function resolve4(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -10264,15 +10264,15 @@ var require_core3 = __commonJS({
         }
         return metaSchema;
       }
-      _removeAllSchemas(schemas2, regex) {
-        for (const keyRef in schemas2) {
-          const sch = schemas2[keyRef];
+      _removeAllSchemas(schemas, regex) {
+        for (const keyRef in schemas) {
+          const sch = schemas[keyRef];
           if (!regex || regex.test(keyRef)) {
             if (typeof sch == "string") {
-              delete schemas2[keyRef];
+              delete schemas[keyRef];
             } else if (sch && !sch.meta) {
               this._cache.delete(sch.schema);
-              delete schemas2[keyRef];
+              delete schemas[keyRef];
             }
           }
         }
@@ -15654,7 +15654,7 @@ var require_dist2 = __commonJS({
     function parse3(stream, callback) {
       const parser = new parser_1.Parser();
       stream.on("data", (buffer) => parser.parse(buffer, callback));
-      return new Promise((resolve3) => stream.on("end", () => resolve3()));
+      return new Promise((resolve4) => stream.on("end", () => resolve4()));
     }
   }
 });
@@ -16419,12 +16419,12 @@ var require_client = __commonJS({
           this._connect(callback);
           return;
         }
-        return new this._Promise((resolve3, reject) => {
+        return new this._Promise((resolve4, reject) => {
           this._connect((error61) => {
             if (error61) {
               reject(error61);
             } else {
-              resolve3(this);
+              resolve4(this);
             }
           });
         });
@@ -16806,8 +16806,8 @@ var require_client = __commonJS({
         } else {
           query = new Query2(config2, values, callback);
           if (!query.callback) {
-            result = new this._Promise((resolve3, reject) => {
-              query.callback = (err, res) => err ? reject(err) : resolve3(res);
+            result = new this._Promise((resolve4, reject) => {
+              query.callback = (err, res) => err ? reject(err) : resolve4(res);
             }).catch((err) => {
               Error.captureStackTrace(err);
               throw err;
@@ -16898,8 +16898,8 @@ var require_client = __commonJS({
         if (cb) {
           this.connection.once("end", cb);
         } else {
-          return new this._Promise((resolve3) => {
-            this.connection.once("end", resolve3);
+          return new this._Promise((resolve4) => {
+            this.connection.once("end", resolve4);
           });
         }
       }
@@ -16948,8 +16948,8 @@ var require_pg_pool = __commonJS({
       const cb = function(err, client) {
         err ? rej(err) : res(client);
       };
-      const result = new Promise2(function(resolve3, reject) {
-        res = resolve3;
+      const result = new Promise2(function(resolve4, reject) {
+        res = resolve4;
         rej = reject;
       }).catch((err) => {
         Error.captureStackTrace(err);
@@ -17010,7 +17010,7 @@ var require_pg_pool = __commonJS({
         if (typeof Promise2.try === "function") {
           return Promise2.try(f);
         }
-        return new Promise2((resolve3) => resolve3(f()));
+        return new Promise2((resolve4) => resolve4(f()));
       }
       _isFull() {
         return this._clients.length >= this.options.max;
@@ -17416,8 +17416,8 @@ var require_query2 = __commonJS({
     NativeQuery.prototype._getPromise = function() {
       if (this._promise) return this._promise;
       this._promise = new Promise(
-        function(resolve3, reject) {
-          this._once("end", resolve3);
+        function(resolve4, reject) {
+          this._once("end", resolve4);
           this._once("error", reject);
         }.bind(this)
       );
@@ -17596,12 +17596,12 @@ var require_client2 = __commonJS({
         this._connect(callback);
         return;
       }
-      return new this._Promise((resolve3, reject) => {
+      return new this._Promise((resolve4, reject) => {
         this._connect((error61) => {
           if (error61) {
             reject(error61);
           } else {
-            resolve3(this);
+            resolve4(this);
           }
         });
       });
@@ -17625,8 +17625,8 @@ var require_client2 = __commonJS({
         query = new NativeQuery(config2, values, callback);
         if (!query.callback) {
           let resolveOut, rejectOut;
-          result = new this._Promise((resolve3, reject) => {
-            resolveOut = resolve3;
+          result = new this._Promise((resolve4, reject) => {
+            resolveOut = resolve4;
             rejectOut = reject;
           }).catch((err) => {
             Error.captureStackTrace(err);
@@ -17689,8 +17689,8 @@ var require_client2 = __commonJS({
       }
       let result;
       if (!cb) {
-        result = new this._Promise(function(resolve3, reject) {
-          cb = (err) => err ? reject(err) : resolve3();
+        result = new this._Promise(function(resolve4, reject) {
+          cb = (err) => err ? reject(err) : resolve4();
         });
       }
       const doEnd = function() {
@@ -20851,12 +20851,12 @@ var ZodTuple = class _ZodTuple extends ZodType {
     });
   }
 };
-ZodTuple.create = (schemas2, params) => {
-  if (!Array.isArray(schemas2)) {
+ZodTuple.create = (schemas, params) => {
+  if (!Array.isArray(schemas)) {
     throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
   }
   return new ZodTuple({
-    items: schemas2,
+    items: schemas,
     typeName: ZodFirstPartyTypeKind.ZodTuple,
     rest: null,
     ...processCreateParams(params)
@@ -37803,7 +37803,7 @@ function toJSONSchema(input2, params) {
       const [_, schema] = entry;
       process2(schema, ctx2);
     }
-    const schemas2 = {};
+    const schemas = {};
     const external = {
       registry: registry2,
       uri: params?.uri,
@@ -37813,15 +37813,15 @@ function toJSONSchema(input2, params) {
     for (const entry of registry2._idmap.entries()) {
       const [key, schema] = entry;
       extractDefs(ctx2, schema);
-      assignProp(schemas2, key, finalize(ctx2, schema));
+      assignProp(schemas, key, finalize(ctx2, schema));
     }
     if (Object.keys(defs).length > 0) {
       const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
-      schemas2.__shared = {
+      schemas.__shared = {
         [defsSegment]: defs
       };
     }
-    return { schemas: schemas2 };
+    return { schemas };
   }
   const ctx = initializeContext({ ...params, processors: allProcessors });
   process2(input2, ctx);
@@ -37983,21 +37983,21 @@ function visit(schema, fnOrHandlers) {
     const h = fnOrHandlers[node2._zod.def.type];
     return h ? h(node2, rewritten) : node2;
   };
-  const cache2 = /* @__PURE__ */ new Map();
+  const cache = /* @__PURE__ */ new Map();
   function run(s) {
-    const cached2 = cache2.get(s);
+    const cached2 = cache.get(s);
     if (cached2 === RESOLVING) {
       return new $ZodLazy({
         type: "lazy",
-        getter: () => cache2.get(s)
+        getter: () => cache.get(s)
       });
     }
     if (cached2 !== void 0)
       return cached2;
-    cache2.set(s, RESOLVING);
+    cache.set(s, RESOLVING);
     const inner = mapInner(s);
     const mapped = fn(inner, inner !== s);
-    cache2.set(s, mapped);
+    cache.set(s, mapped);
     return mapped;
   }
   function mapInner(s) {
@@ -44251,7 +44251,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+        await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error61) {
@@ -44268,7 +44268,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       const earlyReject = (error61) => {
         reject(error61);
       };
@@ -44346,7 +44346,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve3(parseResult.data);
+            resolve4(parseResult.data);
           }
         } catch (error61) {
           reject(error61);
@@ -44607,12 +44607,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve3, interval);
+      const timeoutId = setTimeout(resolve4, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -45703,7 +45703,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+      await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -46367,12 +46367,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve3();
+        resolve4();
       } else {
-        this._stdout.once("drain", resolve3);
+        this._stdout.once("drain", resolve4);
       }
     });
   }
@@ -46380,6 +46380,7 @@ var StdioServerTransport = class {
 
 // dist/config.js
 var import_fs = require("fs");
+var import_fs2 = require("fs");
 var import_path = require("path");
 
 // dist/logger.js
@@ -46504,8 +46505,8 @@ function parseList(value) {
   return new Set(value.split(",").map((v) => v.trim()).filter(Boolean));
 }
 function parseSchemas(value) {
-  const schemas2 = (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  return schemas2.length > 0 ? schemas2 : ["public"];
+  const schemas = (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return schemas.length > 0 ? schemas : ["public"];
 }
 function resolveReadonly(argv, allowWrites) {
   return argv.includes("--readonly") || allowWrites !== "true";
@@ -46575,6 +46576,232 @@ function connectionSummary(poolConfig) {
     return "unknown";
   }
 }
+var CONFIG_FILE_NAMES = ["pgautopilot.json", "pgautopilot.config.json"];
+function resolveEnvVars(value) {
+  return value.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_match, braced, simple) => {
+    const varName = braced ?? simple;
+    if (!varName)
+      return _match;
+    const envVal = process.env[varName];
+    if (envVal === void 0) {
+      log.warn(`Environment variable "${varName}" referenced in config is not set; keeping literal value.`);
+      return _match;
+    }
+    return envVal;
+  });
+}
+function resolveEnvVarsDeep(obj) {
+  if (typeof obj === "string")
+    return resolveEnvVars(obj);
+  if (Array.isArray(obj))
+    return obj.map(resolveEnvVarsDeep);
+  if (obj !== null && typeof obj === "object") {
+    const result = {};
+    for (const [k, v] of Object.entries(obj)) {
+      result[k] = resolveEnvVarsDeep(v);
+    }
+    return result;
+  }
+  return obj;
+}
+function findConfigFile() {
+  for (const name of CONFIG_FILE_NAMES) {
+    const filePath = (0, import_path.resolve)(name);
+    if ((0, import_fs2.existsSync)(filePath))
+      return filePath;
+  }
+  return null;
+}
+function parseMultiDbJson(raw, filePath) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Failed to parse ${filePath}: ${err instanceof Error ? err.message : String(err)}
+
+  Ensure the file contains valid JSON.`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${filePath} must be a JSON object with a "databases" key.`);
+  }
+  const obj = parsed;
+  const databasesRaw = obj.databases;
+  if (typeof databasesRaw !== "object" || databasesRaw === null || Array.isArray(databasesRaw)) {
+    throw new Error(`${filePath} must contain a "databases" object mapping names to connection configs.
+
+  Example:
+  {
+    "databases": {
+      "users": { "url": "postgresql://..." },
+      "analytics": { "url": "postgresql://..." }
+    }
+  }`);
+  }
+  const databases = databasesRaw;
+  const entries = {};
+  for (const [name, entryRaw] of Object.entries(databases)) {
+    if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(name)) {
+      throw new Error(`Database name "${name}" in ${filePath} is invalid.
+  Names must start with a letter or underscore and contain only letters, digits, underscores, or hyphens.`);
+    }
+    if (typeof entryRaw !== "object" || entryRaw === null || Array.isArray(entryRaw)) {
+      throw new Error(`Database "${name}" in ${filePath} must be an object with a "url" field.`);
+    }
+    const entry = entryRaw;
+    const url2 = entry.url;
+    if (typeof url2 !== "string" || url2.length === 0) {
+      throw new Error(`Database "${name}" in ${filePath} must have a non-empty "url" field.`);
+    }
+    if (!url2.startsWith("$") && !url2.startsWith("${")) {
+      try {
+        const parsed2 = new URL(url2);
+        if (parsed2.protocol !== "postgresql:" && parsed2.protocol !== "postgres:") {
+          throw new Error(`Database "${name}" URL must use postgresql:// or postgres:// protocol, got "${parsed2.protocol}".`);
+        }
+        if (!parsed2.hostname) {
+          throw new Error(`Database "${name}" URL is missing a hostname.`);
+        }
+      } catch (err) {
+        if (err instanceof TypeError) {
+          throw new Error(`Database "${name}" URL is not a valid connection string: "${url2.slice(0, 60)}${url2.length > 60 ? "..." : ""}"`);
+        }
+        throw err;
+      }
+    }
+    const entryConfig = { url: url2 };
+    if (typeof entry.readonly === "boolean")
+      entryConfig.readonly = entry.readonly;
+    if (Array.isArray(entry.schemas))
+      entryConfig.schemas = entry.schemas;
+    if (Array.isArray(entry.blocked_tables))
+      entryConfig.blocked_tables = entry.blocked_tables;
+    if (Array.isArray(entry.sensitive_columns))
+      entryConfig.sensitive_columns = entry.sensitive_columns;
+    if (Array.isArray(entry.high_risk_tables))
+      entryConfig.high_risk_tables = entry.high_risk_tables;
+    if (typeof entry.statement_timeout_ms === "number")
+      entryConfig.statement_timeout_ms = entry.statement_timeout_ms;
+    if (typeof entry.pool_max === "number")
+      entryConfig.pool_max = entry.pool_max;
+    entries[name] = entryConfig;
+  }
+  if (Object.keys(entries).length === 0) {
+    throw new Error(`${filePath} must define at least one database in "databases".`);
+  }
+  const defaultsRaw = obj.defaults;
+  const defaults2 = {
+    readonly: true,
+    schemas: ["public"],
+    statement_timeout_ms: 1e4,
+    pool_max: 5
+  };
+  if (typeof defaultsRaw === "object" && defaultsRaw !== null && !Array.isArray(defaultsRaw)) {
+    const d = defaultsRaw;
+    if (typeof d.readonly === "boolean")
+      defaults2.readonly = d.readonly;
+    if (Array.isArray(d.schemas))
+      defaults2.schemas = d.schemas;
+    if (typeof d.statement_timeout_ms === "number")
+      defaults2.statement_timeout_ms = d.statement_timeout_ms;
+    if (typeof d.pool_max === "number")
+      defaults2.pool_max = d.pool_max;
+  }
+  return { databases: entries, defaults: defaults2 };
+}
+function loadMultiDbConfig() {
+  const filePath = findConfigFile();
+  if (!filePath)
+    return null;
+  try {
+    const raw = (0, import_fs.readFileSync)(filePath, "utf-8");
+    const resolved = resolveEnvVarsDeep(parseMultiDbJson(raw, filePath));
+    log.warn(`Loaded multi-database config from ${filePath}.`);
+    return resolved;
+  } catch (err) {
+    if (err instanceof Error && err.code === "ENOENT")
+      return null;
+    throw err;
+  }
+}
+function detectConfigMode(argv) {
+  const envFile = loadDotEnv();
+  const resolveDb = detectDatabaseUrlConflict(envFile, process.env);
+  const databaseUrl = resolveDb.url;
+  for (const [key, value] of Object.entries(envFile.values)) {
+    if (key !== "DATABASE_URL" && !(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+  const readonly2 = resolveReadonly(argv, process.env.ALLOW_WRITES);
+  const modeArg = argv.find((a) => a.startsWith("--mode="));
+  const mode = modeArg?.split("=")[1] ?? (process.env.NODE_ENV === "production" ? "production" : "development");
+  const multiDbConfig = loadMultiDbConfig();
+  if (multiDbConfig && Object.keys(multiDbConfig.databases).length > 0) {
+    if (databaseUrl && !multiDbConfig.databases["default"]) {
+      log.info(`DATABASE_URL from .env will serve as the "default" database alongside ${Object.keys(multiDbConfig.databases).length} database(s) in config file.`);
+    }
+    const dbFlag = argv.find((a) => a.startsWith("--database="));
+    const defaultDatabase = dbFlag ? dbFlag.split("=")[1] ?? null : null;
+    if (defaultDatabase && multiDbConfig && !multiDbConfig.databases[defaultDatabase]) {
+      throw new Error(`--database="${defaultDatabase}" not found in pgautopilot.json.
+Available databases: ${Object.keys(multiDbConfig.databases).join(", ")}`);
+    }
+    const resolved2 = {
+      mode: "multi",
+      argv,
+      globalReadonly: readonly2,
+      globalMode: mode,
+      backupDir: process.env.BACKUPS_DIR ?? "./backups",
+      dockerContainer: process.env.DOCKER_CONTAINER ?? null,
+      allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
+      disabledTools: parseList(process.env.DISABLED_TOOLS),
+      multiDbConfig,
+      singleDbUrl: databaseUrl || null,
+      defaultDatabase
+    };
+    return { mode: "multi", resolved: resolved2 };
+  }
+  if (!databaseUrl) {
+    throw new Error(`DATABASE_URL is not set.
+
+  Looking for a ".env" file in the current working directory:
+    ${envFile.envFilePath}
+
+  Create a .env file there with:
+
+    DATABASE_URL=postgresql://user:password@localhost:5432/yourdb
+
+  Or create a pgautopilot.json with a "databases" section for multi-database support.
+
+  DATABASE_URL was not found in ${resolveDb.from.join(" or ") || "any source"}.`);
+  }
+  const statementTimeoutMs = Number(process.env.PG_STATEMENT_TIMEOUT_MS ?? "10000");
+  const finalTimeoutMs = Number.isFinite(statementTimeoutMs) ? statementTimeoutMs : 1e4;
+  if (mode === "production" && databaseUrl) {
+    try {
+      const url2 = new URL(databaseUrl);
+      if (url2.password && !isLocalHost(url2.hostname)) {
+        log.warn("DATABASE_URL contains a password and targets a non-loopback host. Use a dedicated role and rotate this credential if it has ever appeared on a command line.");
+      }
+    } catch {
+      log.warn("DATABASE_URL could not be parsed.");
+    }
+  }
+  const resolved = {
+    mode: "single",
+    argv,
+    globalReadonly: readonly2,
+    globalMode: mode,
+    backupDir: process.env.BACKUPS_DIR ?? "./backups",
+    dockerContainer: process.env.DOCKER_CONTAINER ?? null,
+    allowRawWrites: process.env.ALLOW_RAW_WRITES === "true" || process.env.ALLOW_RAW_WRITES === "1",
+    disabledTools: parseList(process.env.DISABLED_TOOLS),
+    multiDbConfig: null,
+    singleDbUrl: databaseUrl,
+    defaultDatabase: null
+  };
+  return { mode: "single", resolved };
+}
 
 // node_modules/pg/esm/index.mjs
 var import_lib = __toESM(require_lib2(), 1);
@@ -46609,7 +46836,8 @@ async function waitForConnection(pool, retries, delayMs) {
     } catch (err) {
       lastError = err;
       if (attempt < retries) {
-        await new Promise((resolve3) => setTimeout(resolve3, delayMs));
+        const backoff = delayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve4) => setTimeout(resolve4, backoff));
       }
     }
   }
@@ -46738,8 +46966,13 @@ function bulkWarning(count, operation) {
 }
 
 // dist/toolDefinitions.js
+var DatabaseArg = external_exports.object({
+  database: external_exports.string().optional().describe("Name of the database to query (from pgautopilot.json). Omit to use the current default database.")
+});
+var HealthArgs = DatabaseArg;
 var TableArg = external_exports.object({
-  table: external_exports.string().describe("Name of the table to query")
+  table: external_exports.string().describe("Name of the table to query"),
+  database: external_exports.string().optional().describe("Name of the database to query (from pgautopilot.json). Omit to use the current default database.")
 });
 var FindManyArgs = TableArg.extend({
   where: external_exports.string().optional().describe(`JSON filter object, e.g. '{"email":{"contains":"@gmail"}}'`),
@@ -46766,11 +46999,11 @@ var AggregateArgs = TableArg.extend({
   max: external_exports.string().optional().describe("Comma-separated columns to find maximum")
 });
 var TableInfoArgs = TableArg;
-var RawQueryArgs = external_exports.object({
+var RawQueryArgs = DatabaseArg.extend({
   sql: external_exports.string().describe("Raw SQL statement. SELECT (must end with LIMIT) by default; non-SELECT requires confirmed: true, ALLOW_RAW_WRITES on the server, and a server that is not read-only"),
   confirmed: external_exports.boolean().optional().default(false).describe("Explicit user confirmation to allow a single non-SELECT (write/DDL) statement")
 });
-var BackupArgs = external_exports.object({
+var BackupArgs = DatabaseArg.extend({
   label: external_exports.string().optional().describe("Optional label for the backup filename"),
   confirmed: external_exports.boolean().optional().default(false).describe("Explicit user confirmation required to run a backup")
 });
@@ -46795,6 +47028,10 @@ var DeleteArgs = TableArg.extend({
   dryRun: external_exports.boolean().optional().default(false).describe("If true, simulates without deleting"),
   confirmAll: external_exports.boolean().optional().default(false).describe("Required to delete all rows when where is '{}'")
 });
+var ListDatabasesArgs = external_exports.object({});
+var UseDatabaseArgs = external_exports.object({
+  database: external_exports.string().describe("Name of the database to switch to as the default")
+});
 var readOnly = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -46814,22 +47051,39 @@ var toolDefinitions = {
     inputSchema: {},
     annotations: readOnly
   },
+  db_list_databases: {
+    title: "List Databases",
+    description: "List all configured databases with their connection status, host, and read-only setting. Call this first in multi-database mode to see available database names.",
+    inputSchema: ListDatabasesArgs,
+    annotations: readOnly
+  },
+  db_use_database: {
+    title: "Switch Default Database",
+    description: "Switch the default database for subsequent queries. After switching, all tools without an explicit database parameter will use this database.",
+    inputSchema: UseDatabaseArgs,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
   db_overview: {
     title: "Database Overview",
     description: "Overview of the connected database: tables with approximate row counts, foreign key relationships, server mode, and safety rules. Call this first when exploring a database.",
-    inputSchema: {},
+    inputSchema: DatabaseArg,
     annotations: readOnly
   },
   db_schema: {
     title: "Database Schema",
     description: "Full schema with column-level detail and a relationship diagram, introspected live from the connected PostgreSQL database.",
-    inputSchema: {},
+    inputSchema: DatabaseArg,
     annotations: readOnly
   },
   db_health: {
     title: "Database Health",
-    description: "Check database connectivity, pool stats, uptime, and request count.",
-    inputSchema: {},
+    description: "Check database connectivity, pool stats, uptime, and request count. In multi-database mode, omit the database parameter to see stats for all databases.",
+    inputSchema: HealthArgs,
     annotations: readOnly
   },
   db_table_info: {
@@ -46907,7 +47161,7 @@ var toolDefinitions = {
 
 // dist/toolHandlers.js
 var import_node_child_process = require("node:child_process");
-var import_fs2 = require("fs");
+var import_fs3 = require("fs");
 var import_path2 = require("path");
 
 // dist/sqlBuilder.js
@@ -47081,15 +47335,17 @@ function buildCount(table, where, validColumns) {
 
 // dist/schema.js
 var CACHE_TTL_MS = 5 * 60 * 1e3;
-var cache = null;
-var schemas = ["public"];
-function setSchemas(next) {
-  schemas = next.length > 0 ? next : ["public"];
+var schemaCache = /* @__PURE__ */ new WeakMap();
+var countCache = /* @__PURE__ */ new WeakMap();
+var schemasMap = /* @__PURE__ */ new WeakMap();
+function setSchemas(pool, next) {
+  schemasMap.set(pool, next.length > 0 ? next : ["public"]);
 }
-function getSchemas() {
-  return schemas;
+function getSchemas(pool) {
+  return schemasMap.get(pool) ?? ["public"];
 }
 async function fetchTables(pool) {
+  const schemas = getSchemas(pool);
   const result = await pool.query(`SELECT table_schema, table_name FROM information_schema.tables
      WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
      ORDER BY table_schema, table_name`, [schemas]);
@@ -47176,28 +47432,36 @@ async function loadSchema(pool) {
   return tables;
 }
 async function getSchema(pool, forceRefresh = false) {
-  if (!forceRefresh && cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return cache.tables;
+  if (!forceRefresh) {
+    const cached2 = schemaCache.get(pool);
+    if (cached2 && Date.now() - cached2.at < CACHE_TTL_MS) {
+      return cached2.tables;
+    }
   }
   const tables = await loadSchema(pool);
-  cache = { tables, at: Date.now() };
+  schemaCache.set(pool, { tables, at: Date.now() });
   return tables;
 }
-function invalidateSchemaCache() {
-  cache = null;
-  countCache.clear();
+function invalidateSchemaCache(pool) {
+  schemaCache.delete(pool);
+  countCache.delete(pool);
 }
 var COUNT_CACHE_TTL_MS = 5 * 60 * 1e3;
-var countCache = /* @__PURE__ */ new Map();
 async function getOverviewRowCounts(pool, tables) {
   const result = /* @__PURE__ */ new Map();
   if (tables.length === 0)
     return result;
+  const schemas = getSchemas(pool);
   const estimateResult = await pool.query(`SELECT n.nspname, c.relname, GREATEST(c.reltuples::bigint, 0) AS estimate
      FROM pg_class c
      JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = ANY($1) AND c.relname = ANY($2)`, [schemas, tables.map((t) => t.name)]);
   const estimates = new Map(estimateResult.rows.map((r) => [`${r.nspname}.${r.relname}`, Number(r.estimate)]));
+  let poolCountCache = countCache.get(pool);
+  if (!poolCountCache) {
+    poolCountCache = /* @__PURE__ */ new Map();
+    countCache.set(pool, poolCountCache);
+  }
   await Promise.all(tables.map(async (t) => {
     const key = `${t.schema}.${t.name}`;
     const estimate = estimates.get(key) ?? 0;
@@ -47205,7 +47469,7 @@ async function getOverviewRowCounts(pool, tables) {
       result.set(key, { count: estimate, exact: false });
       return;
     }
-    const cached2 = countCache.get(key);
+    const cached2 = poolCountCache.get(key);
     if (cached2 && Date.now() - cached2.at < COUNT_CACHE_TTL_MS) {
       result.set(key, { count: cached2.count, exact: cached2.count !== null });
       return;
@@ -47217,45 +47481,47 @@ async function getOverviewRowCounts(pool, tables) {
     } catch {
       exact = null;
     }
-    countCache.set(key, { count: exact, at: Date.now() });
+    poolCountCache.set(key, { count: exact, at: Date.now() });
     result.set(key, { count: exact, exact: exact !== null });
   }));
   return result;
 }
-function assertLoadable(table) {
+function assertLoadable(schemas, table) {
   if (table.loadError) {
-    throw new Error(`Table "${tableDisplayName(table.schema, table.name)}" could not be fully introspected: ${table.loadError}`);
+    throw new Error(`Table "${tableDisplayName(schemas, table.schema, table.name)}" could not be fully introspected: ${table.loadError}`);
   }
   return table;
 }
-function tableDisplayName(schema, name) {
+function tableDisplayName(schemas, schema, name) {
   return schemas.length === 1 && schemas[0] === "public" ? name : `${schema}.${name}`;
 }
 async function resolveTableName(pool, input2) {
   const tables = await getSchema(pool);
+  const schemas = getSchemas(pool);
   const exactQualified = tables.filter((t) => `${t.schema}.${t.name}` === input2);
   if (exactQualified.length > 1) {
-    throw new Error(`Table name "${input2}" is ambiguous (${exactQualified.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
+    throw new Error(`Table name "${input2}" is ambiguous (${exactQualified.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
   }
   const exact = exactQualified[0];
   if (exact)
-    return assertLoadable(exact);
+    return assertLoadable(schemas, exact);
   const lower = input2.toLowerCase();
   const matches = tables.filter((t) => t.name.toLowerCase() === lower || `${t.schema}.${t.name}`.toLowerCase() === lower);
   const unique = matches[0];
   if (unique && matches.length === 1)
-    return assertLoadable(unique);
+    return assertLoadable(schemas, unique);
   if (matches.length > 1) {
-    throw new Error(`Table name "${input2}" is ambiguous (${matches.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
+    throw new Error(`Table name "${input2}" is ambiguous (${matches.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}). Use the exact or schema-qualified name.`);
   }
-  const suggestions = tables.filter((t) => `${t.schema}.${t.name}`.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0, 3).map((t) => tableDisplayName(t.schema, t.name));
+  const suggestions = tables.filter((t) => `${t.schema}.${t.name}`.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0, 3).map((t) => tableDisplayName(schemas, t.schema, t.name));
   const hint = suggestions.length ? ` Did you mean: ${suggestions.join(", ")}?` : "";
-  throw new Error(`Table "${input2}" not found. Available: ${tables.map((t) => tableDisplayName(t.schema, t.name)).join(", ")}.${hint}`);
+  throw new Error(`Table "${input2}" not found. Available: ${tables.map((t) => tableDisplayName(schemas, t.schema, t.name)).join(", ")}.${hint}`);
 }
-function schemaToText(tables) {
+function schemaToText(pool, tables) {
+  const schemas = getSchemas(pool);
   const lines = ["DATABASE SCHEMA", "===============", ""];
   for (const table of tables) {
-    lines.push(`[TABLE] ${tableDisplayName(table.schema, table.name)}`);
+    lines.push(`[TABLE] ${tableDisplayName(schemas, table.schema, table.name)}`);
     for (const col of table.columns) {
       const badges = [];
       if (col.isPrimaryKey)
@@ -47264,7 +47530,7 @@ function schemaToText(tables) {
         badges.push("required");
       const fk = table.foreignKeys.find((f) => f.column === col.name);
       if (fk)
-        badges.push(`-> ${referenceDisplay(fk)}`);
+        badges.push(`-> ${referenceDisplay(schemas, fk)}`);
       const badge = badges.length ? ` [${badges.join(", ")}]` : "";
       lines.push(`  - ${col.name}: ${col.dataType}${badge}`);
     }
@@ -47272,33 +47538,35 @@ function schemaToText(tables) {
   }
   return lines.join("\n");
 }
-function referenceDisplay(fk) {
+function referenceDisplay(schemas, fk) {
   const table = schemas.length > 1 ? `${fk.referencesSchema}.${fk.referencesTable}` : fk.referencesTable;
   return `${table}.${fk.referencesColumn}`;
 }
-function semanticRelationLabel(fk) {
+function semanticRelationLabel(schemas, fk) {
   const constraint = fk.constraintName ?? "";
   if (constraint === "" || /_fkey$/i.test(constraint)) {
-    return `${fk.column} -> ${referenceDisplay(fk)}`;
+    return `${fk.column} -> ${referenceDisplay(schemas, fk)}`;
   }
-  return `${fk.column} -> ${referenceDisplay(fk)} [${constraint}]`;
+  return `${fk.column} -> ${referenceDisplay(schemas, fk)} [${constraint}]`;
 }
-function relationsToText(tables) {
+function relationsToText(pool, tables) {
+  const schemas = getSchemas(pool);
   const lines = ["RELATIONSHIPS", "============", ""];
   let hasAny = false;
   for (const table of tables) {
     if (table.foreignKeys.length === 0)
       continue;
     hasAny = true;
-    lines.push(tableDisplayName(table.schema, table.name));
+    lines.push(tableDisplayName(schemas, table.schema, table.name));
     for (const fk of table.foreignKeys) {
-      lines.push(`  -> ${semanticRelationLabel(fk)}`);
+      lines.push(`  -> ${semanticRelationLabel(schemas, fk)}`);
     }
     lines.push("");
   }
   return hasAny ? lines.join("\n") : "No foreign key relationships found.";
 }
 async function getTableStats(pool, table) {
+  const schemas = getSchemas(pool);
   const [sizeResult, countResult, indexResult] = await Promise.all([
     pool.query(`SELECT pg_size_pretty(pg_total_relation_size($1::regclass)) AS size`, [`"${table.schema}"."${table.name}"`]),
     pool.query(`SELECT GREATEST(c.reltuples::bigint, 0) AS estimate
@@ -47317,7 +47585,7 @@ async function getTableStats(pool, table) {
     };
   });
   return {
-    table: tableDisplayName(table.schema, table.name),
+    table: tableDisplayName(schemas, table.schema, table.name),
     approxRowCount: Math.max(0, Number(countResult.rows[0]?.estimate ?? 0)),
     columns: table.columns,
     foreignKeys: table.foreignKeys,
@@ -47384,7 +47652,7 @@ async function tableColumns(pool, schema, table) {
 async function listUserTables(pool) {
   const result = await pool.query(`SELECT table_schema, table_name FROM information_schema.tables
      WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
-     ORDER BY table_schema, table_name`, [getSchemas()]);
+     ORDER BY table_schema, table_name`, [getSchemas(pool)]);
   return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
 }
 async function buildSqlDataDump(pool, tables, options = {}) {
@@ -47538,12 +47806,12 @@ function stripSqlStrings(sql) {
 
 // dist/toolHandlers.js
 function execFileAsync(file2, args, options) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     (0, import_node_child_process.execFile)(file2, args, options, (err, stdout) => {
       if (err)
         reject(err);
       else
-        resolve3(String(stdout));
+        resolve4(String(stdout));
     });
   });
 }
@@ -47665,8 +47933,8 @@ function textResponse(data) {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }]
   };
 }
-function createHandlers(pool, safety, config2) {
-  setSchemas(config2.schemas);
+function createHandlers(pool, safety, config2, connectionManager) {
+  setSchemas(pool, config2.schemas);
   const startTime = Date.now();
   let requestCount = 0;
   let lastSuccessAt = null;
@@ -47678,12 +47946,74 @@ function createHandlers(pool, safety, config2) {
       log.info(`#${requestCount} ${tool}  ${durationMs}ms`);
     }
   }
+  async function resolveDb(args) {
+    if (!connectionManager || !args.database) {
+      return { pool, safety, config: config2 };
+    }
+    const entry = await connectionManager.get(args.database);
+    if (!entry.pool) {
+      throw new Error(`Database "${args.database}" is not connected. Call db_health to check its status.`);
+    }
+    setSchemas(entry.pool, entry.schemas);
+    return {
+      pool: entry.pool,
+      safety: entry.safety,
+      config: {
+        ...config2,
+        poolConfig: entry.poolConfig,
+        readonly: entry.readonly,
+        blockedTables: entry.blockedTables,
+        highRiskTables: entry.highRiskTables,
+        extraSensitiveColumns: entry.extraSensitiveColumns,
+        statementTimeoutMs: entry.statementTimeoutMs,
+        schemas: entry.schemas
+      }
+    };
+  }
   return {
-    db_overview: async () => {
+    db_list_databases: async (_args) => {
+      if (!connectionManager) {
+        return textResponse({
+          mode: "single-database",
+          databases: [{ name: "default", status: "connected", readonly: safety.readonly }],
+          current_default: "default"
+        });
+      }
+      const dbList = connectionManager.list();
+      return textResponse({
+        mode: "multi-database",
+        current_default: connectionManager.getDefaultName(),
+        databases: dbList.map((d) => ({
+          name: d.name,
+          status: d.status,
+          readonly: d.readonly,
+          connected: d.connected,
+          connection: d.connection
+        }))
+      });
+    },
+    db_use_database: async (args) => {
+      if (!connectionManager) {
+        throw new Error("Multi-database mode is not enabled. Add a pgautopilot.json config file to use multiple databases.");
+      }
+      const entry = await connectionManager.get(args.database);
+      connectionManager.setDefault(args.database);
+      setSchemas(entry.pool ?? pool, entry.schemas);
+      return textResponse({
+        success: true,
+        message: `Switched default database to "${args.database}"`,
+        current: args.database,
+        connection: connectionSummary(entry.poolConfig),
+        readonly: entry.readonly
+      });
+    },
+    db_overview: async (args) => {
       const t0 = Date.now();
-      const tables = await getSchema(pool);
-      const counts = await getOverviewRowCounts(pool, tables);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const tables = await getSchema(p);
+      const counts = await getOverviewRowCounts(p, tables);
       let total = 0;
+      const schemas = getSchemas(p);
       const tableLines = tables.map((t) => {
         const key = `${t.schema}.${t.name}`;
         const row = counts.get(key);
@@ -47691,20 +48021,20 @@ function createHandlers(pool, safety, config2) {
         if (row && row.count !== null)
           total += row.count;
         const err = t.loadError ? `  (Error: ${t.loadError})` : "";
-        return `  ${tableDisplayName(t.schema, t.name).padEnd(28)} ${label}${err}`;
+        return `  ${tableDisplayName(schemas, t.schema, t.name).padEnd(28)} ${label}${err}`;
       });
       const lines = [
         "PostgreSQL Database Overview",
         "",
-        `Mode: ${safety.mode} | ${safety.readonly ? "READ-ONLY" : "Read-Write"}`,
+        `Mode: ${s.mode} | ${s.readonly ? "READ-ONLY" : "Read-Write"}`,
         "",
         `TABLES (${tables.length}, ~${total.toLocaleString()} rows total)`,
         ...tableLines,
         "",
-        relationsToText(tables),
+        relationsToText(p, tables),
         "SAFETY",
-        `  Sensitive columns redacted: ${[...safety.sensitiveColumns].join(", ")}`,
-        `  Blocked tables: ${safety.blockedTables.size ? [...safety.blockedTables].join(", ") : "none"}`,
+        `  Sensitive columns redacted: ${[...s.sensitiveColumns].join(", ")}`,
+        `  Blocked tables: ${s.blockedTables.size ? [...s.blockedTables].join(", ") : "none"}`,
         `  High-risk tables: ${safety.highRiskTables.size ? [...safety.highRiskTables].join(", ") : "none"}`,
         "",
         "Use db_schema for full column detail, db_table_info for exact counts and indexes on one table."
@@ -47712,14 +48042,57 @@ function createHandlers(pool, safety, config2) {
       logRequest("db_overview", Date.now() - t0);
       return { content: [{ type: "text", text: lines.join("\n") }] };
     },
-    db_schema: async () => {
+    db_schema: async (args) => {
       const t0 = Date.now();
-      const tables = await getSchema(pool);
-      const text = schemaToText(tables) + "\n" + relationsToText(tables);
+      const { pool: p } = await resolveDb(args);
+      const tables = await getSchema(p);
+      const text = schemaToText(p, tables) + "\n" + relationsToText(p, tables);
       logRequest("db_schema", Date.now() - t0);
       return { content: [{ type: "text", text }] };
     },
-    db_health: async () => {
+    db_health: async (args) => {
+      if (connectionManager) {
+        const t02 = Date.now();
+        const dbList = connectionManager.list();
+        const targetName = args.database ? connectionManager.resolve(args.database) : null;
+        const checks = dbList.filter((d) => !targetName || d.name === targetName).map(async (dbInfo) => {
+          const HEALTH_TIMEOUT_MS = 5e3;
+          try {
+            const entry = await connectionManager.get(dbInfo.name);
+            if (!entry.pool) {
+              return [dbInfo.name, { status: "not_connected" }];
+            }
+            const checkT0 = Date.now();
+            const checkPromise = entry.pool.query("SELECT 1");
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error("Health check timed out")), HEALTH_TIMEOUT_MS);
+            });
+            await Promise.race([checkPromise, timeoutPromise]);
+            const latencyMs2 = Date.now() - checkT0;
+            return [dbInfo.name, {
+              status: "connected",
+              connection: connectionSummary(entry.poolConfig),
+              readonly: entry.readonly,
+              pool: poolStats(entry.pool),
+              lastCheckLatencyMs: latencyMs2
+            }];
+          } catch (err) {
+            return [dbInfo.name, {
+              status: "disconnected",
+              error: decodePgError(err, safety.mode)
+            }];
+          }
+        });
+        const settled = await Promise.all(checks);
+        const results = Object.fromEntries(settled);
+        const latencyMs = Date.now() - t02;
+        logRequest("db_health", latencyMs);
+        return textResponse({
+          mode: "multi-database",
+          databases: results,
+          checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
       const t0 = Date.now();
       try {
         await pool.query("SELECT 1");
@@ -47758,14 +48131,16 @@ function createHandlers(pool, safety, config2) {
     },
     db_table_info: async (args) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
-      const stats = await getTableStats(pool, table);
+      const { pool: p } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const stats = await getTableStats(p, table);
       logRequest("db_table_info", Date.now() - t0);
       return textResponse(stats);
     },
     db_find_many: async (args) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
       const select = parseJsonArray(args.select, "select");
@@ -47778,52 +48153,55 @@ function createHandlers(pool, safety, config2) {
       const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} ${orderClause} LIMIT ${take} OFFSET ${skip}`;
       const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
       const [rowsResult, countResult] = await Promise.all([
-        pool.query(sql, whereFragment.values),
-        pool.query(countFragment.text, countFragment.values)
+        p.query(sql, whereFragment.values),
+        p.query(countFragment.text, countFragment.values)
       ]);
       const total = countResult.rows[0]?.count ?? 0;
       logRequest("db_find_many", Date.now() - t0);
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         count: rowsResult.rows.length,
         total,
         page: skip > 0 ? Math.floor(skip / take) + 1 : 1,
         pageSize: take,
         hasMore: skip + rowsResult.rows.length < total,
-        data: redactRows(rowsResult.rows, safety)
+        data: redactRows(rowsResult.rows, s)
       });
     },
     db_find_first: async (args) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
       const select = parseJsonArray(args.select, "select");
       const columns = buildSelectColumns(select, validColumns);
       const whereFragment = buildWhere(where, validColumns, 1);
       const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} LIMIT 1`;
-      const result = await pool.query(sql, whereFragment.values);
+      const result = await p.query(sql, whereFragment.values);
       logRequest("db_find_first", Date.now() - t0);
-      return textResponse(result.rows[0] ? redactRow(result.rows[0], safety) : null);
+      return textResponse(result.rows[0] ? redactRow(result.rows[0], s) : null);
     },
     db_count: async (args) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
       const fragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
-      const result = await pool.query(fragment.text, fragment.values);
+      const result = await p.query(fragment.text, fragment.values);
       logRequest("db_count", Date.now() - t0);
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         count: result.rows[0]?.count ?? 0
       });
     },
     db_aggregate: async (args) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
-      const groupCols = args.by.split(",").map((s) => s.trim()).filter(Boolean);
+      const groupCols = args.by.split(",").map((s2) => s2.trim()).filter(Boolean);
       if (groupCols.length === 0)
         throw new Error("At least one 'by' column is required");
       groupCols.forEach((c) => {
@@ -47843,7 +48221,7 @@ function createHandlers(pool, safety, config2) {
         const raw = args[label];
         if (typeof raw !== "string" || raw.length === 0)
           continue;
-        const cols = raw.split(",").map((s) => s.trim()).filter(Boolean);
+        const cols = raw.split(",").map((s2) => s2.trim()).filter(Boolean);
         for (const col of cols) {
           if (!validColumns.has(col)) {
             throw new Error(`Unknown column "${col}". Available: ${[...validColumns].join(", ")}`);
@@ -47871,17 +48249,18 @@ function createHandlers(pool, safety, config2) {
       const take = Math.min(toNonNegativeInt(args.take, 50), MAX_TAKE);
       const groupClause = groupCols.map((c) => quoteIdent(c)).join(", ");
       const sql = `SELECT ${selectExprs.join(", ")} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
-      const result = await pool.query(sql, whereFragment.values);
+      const result = await p.query(sql, whereFragment.values);
       logRequest("db_aggregate", Date.now() - t0);
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         groupBy: groupCols,
         count: result.rows.length,
-        data: redactAggregateRows(result.rows, safety, groupCols, aggregates)
+        data: redactAggregateRows(result.rows, s, groupCols, aggregates)
       });
     },
     db_raw_query: async (args) => {
       const t0 = Date.now();
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
       const sql = args.sql.trim();
       const strippedSql = stripSqlStrings(sql).trim();
       if (strippedSql.includes(";") && (strippedSql.indexOf(";") !== strippedSql.length - 1 || strippedSql.split(";").length > 2)) {
@@ -47916,18 +48295,18 @@ function createHandlers(pool, safety, config2) {
         if (limitValue > MAX_RAW_TAKE) {
           throw new Error(`LIMIT value (${limitValue}) exceeds maximum allowed (${MAX_RAW_TAKE}). Use a smaller limit or paginate.`);
         }
-      } else if (safety.readonly) {
+      } else if (s.readonly) {
         throw new Error("Raw write statements are blocked while the server is read-only (--readonly).");
       } else if (!args.confirmed) {
         throw new Error("Only SELECT queries are allowed via db_raw_query. A non-SELECT statement requires explicit user confirmation (confirmed: true) and a server with ALLOW_RAW_WRITES enabled.");
-      } else if (!config2.allowRawWrites) {
+      } else if (!c.allowRawWrites) {
         throw new Error("Raw write statements are disabled on this server. An operator must set ALLOW_RAW_WRITES=true to enable confirmed writes.");
       }
       const execSql = sql.replace(/;\s*$/, "").trim();
-      const client = await pool.connect();
+      const client = await p.connect();
       try {
         await client.query("BEGIN");
-        await client.query(`SET LOCAL statement_timeout = ${config2.statementTimeoutMs}`);
+        await client.query(`SET LOCAL statement_timeout = ${c.statementTimeoutMs}`);
         if (isSelect) {
           await client.query("SET LOCAL default_transaction_read_only = on");
         }
@@ -47935,9 +48314,9 @@ function createHandlers(pool, safety, config2) {
         await client.query("COMMIT");
         logRequest("db_raw_query", Date.now() - t0);
         if (isSelect) {
-          return textResponse(redactRows(result.rows, safety));
+          return textResponse(redactRows(result.rows, s));
         }
-        invalidateSchemaCache();
+        invalidateSchemaCache(p);
         return textResponse({
           command: result.command ?? "STATEMENT",
           rowCount: result.rowCount ?? 0,
@@ -47945,27 +48324,28 @@ function createHandlers(pool, safety, config2) {
         });
       } catch (err) {
         await client.query("ROLLBACK").catch(() => void 0);
-        const suggestion = safety.mode === "development" ? await suggestDbNames(pool, err) : null;
-        const message = decodePgError(err, safety.mode);
+        const suggestion = s.mode === "development" ? await suggestDbNames(p, err) : null;
+        const message = decodePgError(err, s.mode);
         throw new Error(suggestion ? `${message} ${suggestion}` : message);
       } finally {
         client.release();
       }
     },
     db_create: async (args) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "create", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "create", s);
       if (access.blocked)
         throw new Error(access.message);
       const warnings = access.warning ? [access.warning] : [];
       const data = parseJsonObject(args.data, "data");
       if (!data)
         throw new Error("data parameter is required");
-      const { cleaned, stripped } = sanitizeWriteData(data, safety);
+      const { cleaned, stripped } = sanitizeWriteData(data, s);
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldCreate: cleaned,
           ...stripped.length > 0 && { strippedFields: stripped },
           ...warnings.length > 0 && { warnings },
@@ -47975,20 +48355,21 @@ function createHandlers(pool, safety, config2) {
       const validColumns = columnSet(table);
       const fragment = buildInsert(qualifiedTable(table.schema, table.name), cleaned, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          created: redactRow(result.rows[0], safety),
+          created: redactRow(result.rows[0], s),
           ...stripped.length > 0 && { strippedFields: stripped },
           ...warnings.length > 0 && { warnings }
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
     db_upsert: async (args) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "upsert", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "upsert", s);
       if (access.blocked)
         throw new Error(access.message);
       const warnings = access.warning ? [access.warning] : [];
@@ -48005,17 +48386,17 @@ function createHandlers(pool, safety, config2) {
         return sorted.length === whereKeys.length && sorted.every((c, i) => c === whereKeys[i]);
       });
       if (!matched) {
-        const available = table.uniqueColumnSets.map((s) => s.join("+")).join(", ") || "none";
-        throw new Error(`where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(table.schema, table.name)}". Available: ${available}`);
+        const available = table.uniqueColumnSets.map((s2) => s2.join("+")).join(", ") || "none";
+        throw new Error(`where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(getSchemas(p), table.schema, table.name)}". Available: ${available}`);
       }
       const fullInsert = { ...where, ...createData };
-      const { cleaned: cleanedInsert, stripped: strippedInsert } = sanitizeWriteData(fullInsert, safety);
-      const { cleaned: cleanedUpdate, stripped: strippedUpdate } = sanitizeWriteData(updateData, safety);
+      const { cleaned: cleanedInsert, stripped: strippedInsert } = sanitizeWriteData(fullInsert, s);
+      const { cleaned: cleanedUpdate, stripped: strippedUpdate } = sanitizeWriteData(updateData, s);
       const stripped = [.../* @__PURE__ */ new Set([...strippedInsert, ...strippedUpdate])];
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldInsert: cleanedInsert,
           wouldUpdate: cleanedUpdate,
           ...stripped.length > 0 && { strippedFields: stripped },
@@ -48026,37 +48407,38 @@ function createHandlers(pool, safety, config2) {
       const validColumns = columnSet(table);
       const fragment = buildUpsert(qualifiedTable(table.schema, table.name), cleanedInsert, cleanedUpdate, matched, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          upserted: redactRow(result.rows[0], safety),
+          upserted: redactRow(result.rows[0], s),
           ...stripped.length > 0 && { strippedFields: stripped },
           ...warnings.length > 0 && { warnings }
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
     db_update_many: async (args) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "update", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "update", s);
       if (access.blocked)
         throw new Error(access.message);
       const where = parseJsonObject(args.where, "where");
       const data = parseJsonObject(args.data, "data");
       if (!data)
         throw new Error("data parameter is required");
-      const { cleaned, stripped } = sanitizeWriteData(data, safety);
+      const { cleaned, stripped } = sanitizeWriteData(data, s);
       const validColumns = columnSet(table);
       const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
-      const countResult = await pool.query(countFragment.text, countFragment.values);
+      const countResult = await p.query(countFragment.text, countFragment.values);
       const matched = countResult.rows[0]?.count ?? 0;
       const bw = bulkWarning(matched, "update");
       const warnings = [access.warning, bw].filter((w) => Boolean(w));
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           matched,
           wouldSet: cleaned,
           ...stripped.length > 0 && { strippedFields: stripped },
@@ -48071,35 +48453,36 @@ function createHandlers(pool, safety, config2) {
       }
       const fragment = buildUpdate(qualifiedTable(table.schema, table.name), cleaned, where, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           matched: result.rowCount ?? 0,
           ...stripped.length > 0 && { strippedFields: stripped },
           ...warnings.length > 0 && { warnings },
           message: `${result.rowCount ?? 0} row(s) updated.`
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
     db_delete_many: async (args) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "delete", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "delete", s);
       if (access.blocked)
         throw new Error(access.message);
       const where = parseJsonObject(args.where, "where");
       const validColumns = columnSet(table);
       const countFragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
-      const countResult = await pool.query(countFragment.text, countFragment.values);
+      const countResult = await p.query(countFragment.text, countFragment.values);
       const matched = countResult.rows[0]?.count ?? 0;
       const bw = bulkWarning(matched, "delete");
       const warnings = [access.warning, bw].filter((w) => Boolean(w));
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldDelete: matched,
           ...warnings.length > 0 && { warnings },
           message: `DRY RUN -- ${matched} row(s) would be deleted.`
@@ -48112,36 +48495,37 @@ function createHandlers(pool, safety, config2) {
       }
       const fragment = buildDelete(qualifiedTable(table.schema, table.name), where, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           deleted: result.rowCount ?? 0,
           ...warnings.length > 0 && { warnings },
           message: `${result.rowCount ?? 0} row(s) deleted.`
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
     db_backup: async (args) => {
-      const access = checkWriteAccess("backup", "backup", safety);
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
+      const access = checkWriteAccess("backup", "backup", s);
       if (access.blocked)
         throw new Error(access.message);
       if (!args.confirmed) {
         throw new Error("Refusing to create a backup without explicit user confirmation. Pass confirmed: true.");
       }
-      const databaseUrl = process.env.DATABASE_URL;
+      const databaseUrl = typeof c.poolConfig.connectionString === "string" ? c.poolConfig.connectionString : null;
       if (!databaseUrl)
-        throw new Error("DATABASE_URL is not set -- required to run pg_dump.");
-      if (!(0, import_fs2.existsSync)(config2.backupDir)) {
-        (0, import_fs2.mkdirSync)(config2.backupDir, { recursive: true });
+        throw new Error("No connection string available -- required to run pg_dump.");
+      if (!(0, import_fs3.existsSync)(c.backupDir)) {
+        (0, import_fs3.mkdirSync)(c.backupDir, { recursive: true });
       }
       const now = /* @__PURE__ */ new Date();
       const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const label = args.label ? `-${args.label.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "";
       const filename = `backup-${ts}${label}.sql`;
-      const filepath = (0, import_path2.resolve)(config2.backupDir, filename);
+      const filepath = (0, import_path2.resolve)(c.backupDir, filename);
       const url2 = new URL(databaseUrl);
       const pgDumpArgs = [
         "-h",
@@ -48170,13 +48554,13 @@ function createHandlers(pool, safety, config2) {
         });
       } catch (err) {
         const missingBinary = typeof err === "object" && err !== null && err.code === "ENOENT";
-        if (config2.dockerContainer && !missingBinary) {
+        if (c.dockerContainer && !missingBinary) {
           try {
             const user = decodeURIComponent(url2.username || "postgres");
             const dbName = url2.pathname.replace(/^\//, "") || "postgres";
             dump = await execFileAsync("docker", [
               "exec",
-              config2.dockerContainer,
+              c.dockerContainer,
               "pg_dump",
               "-U",
               user,
@@ -48186,11 +48570,11 @@ function createHandlers(pool, safety, config2) {
               "--if-exists"
             ], { encoding: "utf-8", timeout: 3e4, maxBuffer: 1024 * 1024 * 100 });
           } catch {
-            dump = await buildSqlDataDump(pool);
+            dump = await buildSqlDataDump(p);
             fallback = true;
           }
         } else if (missingBinary) {
-          dump = await buildSqlDataDump(pool);
+          dump = await buildSqlDataDump(p);
           fallback = true;
         } else {
           throw new Error("pg_dump failed. Install postgresql-client, or set DOCKER_CONTAINER to fall back to 'docker exec'.");
@@ -48201,7 +48585,7 @@ function createHandlers(pool, safety, config2) {
 
 ` : "";
       dump = header + dump;
-      (0, import_fs2.writeFileSync)(filepath, dump, "utf-8");
+      (0, import_fs3.writeFileSync)(filepath, dump, "utf-8");
       const sizeKB = (Buffer.byteLength(dump, "utf-8") / 1024).toFixed(1);
       return textResponse({
         backup: filename,
@@ -48214,6 +48598,276 @@ function createHandlers(pool, safety, config2) {
         },
         message: fallback ? `Backup saved: ${filename} (${sizeKB} KB) \u2014 data only via SQL fallback (pg_dump not found).` : `Backup saved: ${filename} (${sizeKB} KB)`
       });
+    }
+  };
+}
+
+// dist/connectionManager.js
+var ConnectionManager = class {
+  databases = /* @__PURE__ */ new Map();
+  defaultName = null;
+  connecting = /* @__PURE__ */ new Map();
+  register(name, entry) {
+    this.databases.set(name, entry);
+    if (this.defaultName === null) {
+      this.defaultName = name;
+    }
+  }
+  has(name) {
+    return this.databases.has(name);
+  }
+  getDefaultName() {
+    return this.defaultName;
+  }
+  setDefault(name) {
+    if (!this.databases.has(name)) {
+      throw new Error(`Database "${name}" is not configured. Available: ${[...this.databases.keys()].join(", ")}`);
+    }
+    this.defaultName = name;
+  }
+  async get(name) {
+    const entry = this.databases.get(name);
+    if (!entry) {
+      const available = [...this.databases.keys()].join(", ");
+      throw new Error(`Database "${name}" is not configured. Available databases: ${available || "(none)"}`);
+    }
+    if (entry.status === "connected" && entry.pool) {
+      try {
+        await entry.pool.query("SELECT 1");
+        return entry;
+      } catch {
+        log.warn(`Pool for "${name}" is unhealthy, reconnecting...`);
+        await entry.pool.end().catch(() => void 0);
+        entry.pool = null;
+        entry.status = "not_connected";
+      }
+    }
+    const inFlight = this.connecting.get(name);
+    if (inFlight)
+      return inFlight;
+    const promise2 = this.connect(entry).finally(() => {
+      this.connecting.delete(name);
+    });
+    this.connecting.set(name, promise2);
+    return promise2;
+  }
+  async getDefault() {
+    if (!this.defaultName) {
+      throw new Error("No default database is configured.");
+    }
+    return this.get(this.defaultName);
+  }
+  resolve(name) {
+    if (name)
+      return name;
+    if (this.defaultName)
+      return this.defaultName;
+    throw new Error("No database specified and no default database configured.");
+  }
+  list() {
+    return [...this.databases.entries()].map(([name, entry]) => ({
+      name,
+      status: entry.status,
+      readonly: entry.readonly,
+      connected: entry.status === "connected",
+      connection: connectionSummary(entry.poolConfig)
+    }));
+  }
+  async connect(entry) {
+    if (entry.status === "connecting") {
+      while (entry.status === "connecting") {
+        await new Promise((resolve4) => setTimeout(resolve4, 100));
+      }
+      if (entry.status === "connected" && entry.pool) {
+        return entry;
+      }
+      throw new Error(`Failed to connect to database "${entry.name}": ${entry.lastError ?? "unknown error"}`);
+    }
+    entry.status = "connecting";
+    const pool = createPool(entry.poolConfig);
+    try {
+      await waitForConnection(pool, 3, 2e3);
+      entry.pool = pool;
+      entry.status = "connected";
+      entry.lastError = null;
+      log.info(`Connected to database "${entry.name}": ${connectionSummary(entry.poolConfig)}`);
+      return entry;
+    } catch (err) {
+      entry.status = "error";
+      entry.lastError = err instanceof Error ? err.message : String(err);
+      await pool.end().catch(() => void 0);
+      log.error(`Failed to connect to database "${entry.name}": ${entry.lastError}`);
+      throw new Error(`Failed to connect to database "${entry.name}": ${entry.lastError}
+  Ensure the URL is correct and PostgreSQL is reachable.`);
+    }
+  }
+  async connectDefault() {
+    if (!this.defaultName) {
+      throw new Error("No default database is configured.");
+    }
+    const entry = this.databases.get(this.defaultName);
+    if (!entry) {
+      throw new Error(`Default database "${this.defaultName}" not found.`);
+    }
+    return this.connect(entry);
+  }
+  async closeAll() {
+    const closePromises = [];
+    for (const [name, entry] of this.databases) {
+      if (entry.pool) {
+        closePromises.push(entry.pool.end().then(() => {
+          entry.pool = null;
+          entry.status = "not_connected";
+          log.info(`Closed pool for database "${name}".`);
+        }));
+      }
+    }
+    await Promise.all(closePromises);
+  }
+};
+function buildDatabaseEntry(name, url2, defaults2, overrides = {}) {
+  const readonly2 = overrides.readonly ?? defaults2.readonly;
+  const schemas = overrides.schemas ?? defaults2.schemas;
+  const blockedTables = new Set(overrides.blocked_tables ?? []);
+  const highRiskTables = new Set(overrides.high_risk_tables ?? []);
+  const extraSensitiveColumns = new Set(overrides.sensitive_columns ?? []);
+  const statementTimeoutMs = overrides.statement_timeout_ms ?? defaults2.statementTimeoutMs;
+  const poolMax = overrides.pool_max ?? defaults2.poolMax;
+  let urlObj;
+  try {
+    urlObj = new URL(url2);
+  } catch {
+    throw new Error(`Database "${name}" has an invalid URL: "${url2.slice(0, 60)}${url2.length > 60 ? "..." : ""}"
+  Expected a postgresql:// or postgres:// connection string.`);
+  }
+  const poolConfig = {
+    connectionString: url2,
+    ssl: resolveSsl(urlObj),
+    max: Number.isFinite(poolMax) && poolMax > 0 ? poolMax : 5,
+    connectionTimeoutMillis: 1e4,
+    idleTimeoutMillis: 3e4,
+    options: `-c statement_timeout=${statementTimeoutMs}`
+  };
+  const mode = process.env.NODE_ENV ?? "development";
+  const safety = buildSafetyState(readonly2, mode, blockedTables, extraSensitiveColumns, highRiskTables);
+  return {
+    name,
+    url: url2,
+    poolConfig,
+    readonly: readonly2,
+    schemas,
+    blockedTables,
+    highRiskTables,
+    extraSensitiveColumns,
+    statementTimeoutMs,
+    safety,
+    pool: null,
+    status: "not_connected",
+    lastError: null
+  };
+}
+
+// dist/configWatcher.js
+var import_fs4 = require("fs");
+var import_path3 = require("path");
+var CONFIG_FILE_NAMES2 = ["pgautopilot.json", "pgautopilot.config.json"];
+var DEBOUNCE_MS = 500;
+function findConfigFile2() {
+  for (const name of CONFIG_FILE_NAMES2) {
+    const filePath = (0, import_path3.resolve)(name);
+    if ((0, import_fs4.existsSync)(filePath))
+      return filePath;
+  }
+  return null;
+}
+function watchConfig(manager, options = {}) {
+  const configPath = findConfigFile2();
+  if (!configPath) {
+    log.warn("No pgautopilot.json found; config hot-reload disabled.");
+    return { stop: () => {
+    } };
+  }
+  let debounceTimer = null;
+  let fsWatcher = null;
+  function reload() {
+    try {
+      const newConfig = loadMultiDbConfig();
+      if (!newConfig) {
+        log.warn("Config file removed; keeping current connections.");
+        return;
+      }
+      const newNames = Object.keys(newConfig.databases);
+      const currentNames = new Set(manager.list().map((d) => d.name));
+      for (const name of newNames) {
+        if (!manager.has(name)) {
+          try {
+            const entryConfig = newConfig.databases[name];
+            const overrides = {};
+            if (entryConfig.readonly !== void 0)
+              overrides.readonly = entryConfig.readonly;
+            if (entryConfig.schemas !== void 0)
+              overrides.schemas = entryConfig.schemas;
+            if (entryConfig.blocked_tables !== void 0)
+              overrides.blocked_tables = entryConfig.blocked_tables;
+            if (entryConfig.sensitive_columns !== void 0)
+              overrides.sensitive_columns = entryConfig.sensitive_columns;
+            if (entryConfig.high_risk_tables !== void 0)
+              overrides.high_risk_tables = entryConfig.high_risk_tables;
+            if (entryConfig.statement_timeout_ms !== void 0)
+              overrides.statement_timeout_ms = entryConfig.statement_timeout_ms;
+            if (entryConfig.pool_max !== void 0)
+              overrides.pool_max = entryConfig.pool_max;
+            const entry = buildDatabaseEntry(name, entryConfig.url, {
+              readonly: newConfig.defaults.readonly,
+              schemas: newConfig.defaults.schemas,
+              statementTimeoutMs: newConfig.defaults.statement_timeout_ms,
+              poolMax: newConfig.defaults.pool_max
+            }, overrides);
+            manager.register(name, entry);
+            log.info(`Hot-reload: added database "${name}"`);
+          } catch (err) {
+            log.error(`Hot-reload: failed to add database "${name}": ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+      for (const name of currentNames) {
+        if (!newNames.includes(name)) {
+          log.info(`Hot-reload: database "${name}" removed from config (pool stays alive until shutdown)`);
+        }
+      }
+      options.onReload?.(newConfig);
+    } catch (err) {
+      const error61 = err instanceof Error ? err : new Error(String(err));
+      log.error(`Config hot-reload failed: ${error61.message}`);
+      options.onError?.(error61);
+    }
+  }
+  function handleChange() {
+    if (debounceTimer)
+      clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      log.info("Config file changed, reloading...");
+      reload();
+    }, DEBOUNCE_MS);
+  }
+  try {
+    fsWatcher = (0, import_fs4.watch)(configPath, { persistent: false }, (eventType) => {
+      if (eventType === "change") {
+        handleChange();
+      }
+    });
+    log.info(`Watching ${configPath} for changes.`);
+  } catch (err) {
+    log.warn(`Could not watch config file: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return {
+    stop: () => {
+      if (debounceTimer)
+        clearTimeout(debounceTimer);
+      if (fsWatcher) {
+        fsWatcher.close();
+        fsWatcher = null;
+      }
     }
   };
 }
@@ -48273,22 +48927,25 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.2.1"
+    version: "2.3.0"
   });
-  let config2 = null;
-  let configError = null;
+  const argv = process.argv.slice(2);
+  let configMode = null;
   try {
-    config2 = loadConfig(process.argv.slice(2));
+    configMode = detectConfigMode(argv);
   } catch (err) {
-    configError = err instanceof Error ? err.message : String(err);
-    log.error(`Configuration error: ${configError}`);
+    log.error(`Configuration error: ${err instanceof Error ? err.message : String(err)}`);
   }
-  if (configError) {
+  if (!configMode) {
     const statusHandler2 = async () => ({
       content: [
         {
           type: "text",
-          text: JSON.stringify({ status: "not_configured", error: configError, guidance: CONFIG_GUIDANCE }, null, 2)
+          text: JSON.stringify({
+            status: "not_configured",
+            error: "Could not load configuration.",
+            guidance: CONFIG_GUIDANCE
+          }, null, 2)
         }
       ]
     });
@@ -48298,48 +48955,181 @@ async function main() {
     log.warn("PGAutoPilot started in not-configured mode. Fix DATABASE_URL in the .env and restart.");
     return;
   }
-  if (!config2) {
-    log.error("Unexpected: loadConfig returned no config and no error.");
-    process.exit(1);
+  if (configMode.mode === "single") {
+    let config3 = null;
+    try {
+      config3 = loadConfig(argv);
+    } catch (err) {
+      log.error(`Configuration error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!config3) {
+      const statusHandler3 = async () => configErrorResult("Failed to load single-database config.");
+      registerTools(server, { mcp_status: statusHandler3 }, /* @__PURE__ */ new Set());
+      const transport3 = new StdioServerTransport();
+      await server.connect(transport3);
+      return;
+    }
+    const pool2 = createPool(config3.poolConfig);
+    const safety2 = buildSafetyState(config3.readonly, config3.mode, config3.blockedTables, config3.extraSensitiveColumns, config3.highRiskTables);
+    try {
+      await waitForConnection(pool2, 5, 2e3);
+      log.info(`Connected to ${connectionSummary(config3.poolConfig)}`);
+    } catch (err) {
+      log.error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
+      log.error("Ensure DATABASE_URL points to a reachable PostgreSQL instance.");
+      await pool2.end();
+      process.exit(1);
+    }
+    const handlers2 = createHandlers(pool2, safety2, config3);
+    const untypedHandlers2 = handlers2;
+    const statusHandler2 = async () => ({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            status: "ready",
+            database: connectionSummary(config3.poolConfig),
+            mode: safety2.mode,
+            readonly: safety2.readonly
+          }, null, 2)
+        }
+      ]
+    });
+    registerTools(server, { ...untypedHandlers2, mcp_status: statusHandler2 }, config3.disabledTools);
+    const transport2 = new StdioServerTransport();
+    await server.connect(transport2);
+    log.info("PGAutoPilot v2.3.0 ready");
+    log.info(`Connection: ${connectionSummary(config3.poolConfig)}`);
+    log.info(`Mode: ${safety2.mode} | Read-only: ${safety2.readonly ? "yes" : "no"}`);
+    if (safety2.blockedTables.size > 0) {
+      log.info(`Blocked tables: ${[...safety2.blockedTables].join(", ")}`);
+    }
+    const shutdown2 = async () => {
+      await server.close();
+      await pool2.end();
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown2);
+    process.on("SIGTERM", shutdown2);
+    return;
   }
-  const pool = createPool(config2.poolConfig);
-  const safety = buildSafetyState(config2.readonly, config2.mode, config2.blockedTables, config2.extraSensitiveColumns, config2.highRiskTables);
+  const resolved = configMode.resolved;
+  const multiDb = resolved.multiDbConfig;
+  log.info("PGAutoPilot v2.3.0 starting in multi-database mode");
+  log.info(`Databases configured: ${Object.keys(multiDb.databases).join(", ")}`);
+  const manager = new ConnectionManager();
+  const dbNames = Object.keys(multiDb.databases);
+  for (const name of dbNames) {
+    const entryConfig = multiDb.databases[name];
+    const overrides = {};
+    if (entryConfig.readonly !== void 0)
+      overrides.readonly = entryConfig.readonly;
+    if (entryConfig.schemas !== void 0)
+      overrides.schemas = entryConfig.schemas;
+    if (entryConfig.blocked_tables !== void 0)
+      overrides.blocked_tables = entryConfig.blocked_tables;
+    if (entryConfig.sensitive_columns !== void 0)
+      overrides.sensitive_columns = entryConfig.sensitive_columns;
+    if (entryConfig.high_risk_tables !== void 0)
+      overrides.high_risk_tables = entryConfig.high_risk_tables;
+    if (entryConfig.statement_timeout_ms !== void 0)
+      overrides.statement_timeout_ms = entryConfig.statement_timeout_ms;
+    if (entryConfig.pool_max !== void 0)
+      overrides.pool_max = entryConfig.pool_max;
+    const entry = buildDatabaseEntry(name, entryConfig.url, {
+      readonly: multiDb.defaults.readonly,
+      schemas: multiDb.defaults.schemas,
+      statementTimeoutMs: multiDb.defaults.statement_timeout_ms,
+      poolMax: multiDb.defaults.pool_max
+    }, overrides);
+    manager.register(name, entry);
+  }
+  if (resolved.singleDbUrl && !manager.has("default")) {
+    const defaultEntry2 = buildDatabaseEntry("default", resolved.singleDbUrl, {
+      readonly: multiDb.defaults.readonly,
+      schemas: multiDb.defaults.schemas,
+      statementTimeoutMs: multiDb.defaults.statement_timeout_ms,
+      poolMax: multiDb.defaults.pool_max
+    }, {});
+    manager.register("default", defaultEntry2);
+  }
+  if (resolved.defaultDatabase) {
+    manager.setDefault(resolved.defaultDatabase);
+  }
+  let defaultEntry;
   try {
-    await waitForConnection(pool, 5, 2e3);
-    log.info(`Connected to ${connectionSummary(config2.poolConfig)}`);
+    defaultEntry = await manager.connectDefault();
   } catch (err) {
-    log.error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
-    log.error("Ensure DATABASE_URL points to a reachable PostgreSQL instance.");
-    await pool.end();
-    process.exit(1);
+    log.error(`Failed to connect to default database: ${err instanceof Error ? err.message : String(err)}`);
+    log.error("Other databases will connect on first use.");
   }
-  const handlers = createHandlers(pool, safety, config2);
+  const remainingNames = dbNames.filter((n) => n !== (resolved.defaultDatabase ?? dbNames[0]));
+  if (remainingNames.length > 0) {
+    log.info(`Probing ${remainingNames.length} additional database(s)...`);
+    const probes = remainingNames.map(async (name) => {
+      try {
+        const entry = await manager.get(name);
+        if (entry.pool) {
+          log.info(`  [${name}] OK \u2014 ${connectionSummary(entry.poolConfig)}`);
+        }
+      } catch (err) {
+        log.warn(`  [${name}] unreachable \u2014 ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+    Promise.allSettled(probes).then(() => {
+      log.info("Database probe complete.");
+    });
+  }
+  const pool = defaultEntry?.pool ?? null;
+  const safety = defaultEntry?.safety ?? buildSafetyState(resolved.globalReadonly, resolved.globalMode, /* @__PURE__ */ new Set(), /* @__PURE__ */ new Set(), /* @__PURE__ */ new Set());
+  const config2 = {
+    poolConfig: defaultEntry?.poolConfig ?? { connectionString: "" },
+    readonly: safety.readonly,
+    mode: safety.mode,
+    backupDir: resolved.backupDir,
+    dockerContainer: resolved.dockerContainer,
+    blockedTables: safety.blockedTables,
+    highRiskTables: safety.highRiskTables,
+    extraSensitiveColumns: safety.sensitiveColumns,
+    statementTimeoutMs: defaultEntry?.statementTimeoutMs ?? 1e4,
+    allowRawWrites: resolved.allowRawWrites,
+    schemas: defaultEntry?.schemas ?? ["public"],
+    disabledTools: resolved.disabledTools
+  };
+  const handlers = pool ? createHandlers(pool, safety, config2, manager) : {};
   const untypedHandlers = handlers;
+  const dbList = manager.list();
   const statusHandler = async () => ({
     content: [
       {
         type: "text",
         text: JSON.stringify({
           status: "ready",
-          database: connectionSummary(config2.poolConfig),
-          mode: safety.mode,
-          readonly: safety.readonly
+          mode: "multi-database",
+          current_default: manager.getDefaultName(),
+          databases: dbList.map((d) => ({
+            name: d.name,
+            connection: d.connection,
+            status: d.status,
+            readonly: d.readonly
+          }))
         }, null, 2)
       }
     ]
   });
-  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, config2.disabledTools);
+  registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, resolved.disabledTools);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.1.3 ready");
-  log.info(`Connection: ${connectionSummary(config2.poolConfig)}`);
-  log.info(`Mode: ${safety.mode} | Read-only: ${safety.readonly ? "yes" : "no"}`);
-  if (safety.blockedTables.size > 0) {
-    log.info(`Blocked tables: ${[...safety.blockedTables].join(", ")}`);
+  log.info("Multi-database mode ready");
+  for (const entry of dbList) {
+    const statusIcon = entry.connected ? "connected" : "not connected (lazy)";
+    log.info(`  [${entry.name}] ${entry.connection} \u2014 ${statusIcon} | readonly: ${entry.readonly}`);
   }
+  const configWatcher = watchConfig(manager);
   const shutdown = async () => {
+    configWatcher.stop();
     await server.close();
-    await pool.end();
+    await manager.closeAll();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

@@ -25,9 +25,13 @@ import {
   UpsertArgs,
   AggregateArgs,
   TableInfoArgs,
+  HealthArgs,
+  UseDatabaseArgs,
 } from "./toolDefinitions.js";
+import type { ConnectionManager, DatabaseEntry } from "./connectionManager.js";
 import {
   getSchema,
+  getSchemas,
   resolveTableName,
   schemaToText,
   relationsToText,
@@ -61,6 +65,7 @@ import {
   qualifiedTable,
 } from "./sqlBuilder.js";
 import { poolStats } from "./db.js";
+import { connectionSummary } from "./config.js";
 import type { AppConfig } from "./config.js";
 import { log } from "./logger.js";
 
@@ -201,8 +206,8 @@ function textResponse(data: unknown) {
   };
 }
 
-export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfig) {
-  setSchemas(config.schemas);
+export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfig, connectionManager?: ConnectionManager) {
+  setSchemas(pool, config.schemas);
   const startTime = Date.now();
   let requestCount = 0;
   let lastSuccessAt: number | null = null;
@@ -216,13 +221,88 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
     }
   }
 
-  return {
-    db_overview: async () => {
-      const t0 = Date.now();
-      const tables = await getSchema(pool);
+  // Resolve the target pool/safety/config for a given tool call.
+  // In multi-DB mode, uses args.database; otherwise falls back to the default.
+  async function resolveDb(args: { database?: string | undefined }): Promise<{
+    pool: Pool;
+    safety: SafetyState;
+    config: AppConfig;
+  }> {
+    if (!connectionManager || !args.database) {
+      return { pool, safety, config };
+    }
+    const entry = await connectionManager.get(args.database);
+    if (!entry.pool) {
+      throw new Error(
+        `Database "${args.database}" is not connected. Call db_health to check its status.`,
+      );
+    }
+    setSchemas(entry.pool, entry.schemas);
+    return {
+      pool: entry.pool,
+      safety: entry.safety,
+      config: {
+        ...config,
+        poolConfig: entry.poolConfig,
+        readonly: entry.readonly,
+        blockedTables: entry.blockedTables,
+        highRiskTables: entry.highRiskTables,
+        extraSensitiveColumns: entry.extraSensitiveColumns,
+        statementTimeoutMs: entry.statementTimeoutMs,
+        schemas: entry.schemas,
+      },
+    };
+  }
 
-      const counts = await getOverviewRowCounts(pool, tables);
+  return {
+    db_list_databases: async (_args: Record<string, never>) => {
+      if (!connectionManager) {
+        return textResponse({
+          mode: "single-database",
+          databases: [{ name: "default", status: "connected", readonly: safety.readonly }],
+          current_default: "default",
+        });
+      }
+      const dbList = connectionManager.list();
+      return textResponse({
+        mode: "multi-database",
+        current_default: connectionManager.getDefaultName(),
+        databases: dbList.map((d) => ({
+          name: d.name,
+          status: d.status,
+          readonly: d.readonly,
+          connected: d.connected,
+          connection: d.connection,
+        })),
+      });
+    },
+
+    db_use_database: async (args: z.infer<typeof UseDatabaseArgs>) => {
+      if (!connectionManager) {
+        throw new Error(
+          "Multi-database mode is not enabled. Add a pgautopilot.json config file to use multiple databases."
+        );
+      }
+      const entry = await connectionManager.get(args.database);
+      connectionManager.setDefault(args.database);
+      setSchemas(entry.pool ?? pool, entry.schemas);
+      return textResponse({
+        success: true,
+        message: `Switched default database to "${args.database}"`,
+        current: args.database,
+        connection: connectionSummary(entry.poolConfig),
+        readonly: entry.readonly,
+      });
+    },
+
+    db_overview: async (args: z.infer<typeof HealthArgs>) => {
+      const t0 = Date.now();
+      const { pool: p, safety: s } = await resolveDb(args);
+      const tables = await getSchema(p);
+
+      const counts = await getOverviewRowCounts(p, tables);
       let total = 0;
+      const schemas = getSchemas(p);
       const tableLines = tables.map((t) => {
         const key = `${t.schema}.${t.name}`;
         const row = counts.get(key);
@@ -233,21 +313,21 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
             : `        ? rows (count unavailable)`;
         if (row && row.count !== null) total += row.count;
         const err = t.loadError ? `  (Error: ${t.loadError})` : "";
-        return `  ${tableDisplayName(t.schema, t.name).padEnd(28)} ${label}${err}`;
+        return `  ${tableDisplayName(schemas, t.schema, t.name).padEnd(28)} ${label}${err}`;
       });
 
       const lines = [
         "PostgreSQL Database Overview",
         "",
-        `Mode: ${safety.mode} | ${safety.readonly ? "READ-ONLY" : "Read-Write"}`,
+        `Mode: ${s.mode} | ${s.readonly ? "READ-ONLY" : "Read-Write"}`,
         "",
         `TABLES (${tables.length}, ~${total.toLocaleString()} rows total)`,
         ...tableLines,
         "",
-        relationsToText(tables),
+        relationsToText(p, tables),
         "SAFETY",
-        `  Sensitive columns redacted: ${[...safety.sensitiveColumns].join(", ")}`,
-        `  Blocked tables: ${safety.blockedTables.size ? [...safety.blockedTables].join(", ") : "none"}`,
+        `  Sensitive columns redacted: ${[...s.sensitiveColumns].join(", ")}`,
+        `  Blocked tables: ${s.blockedTables.size ? [...s.blockedTables].join(", ") : "none"}`,
         `  High-risk tables: ${safety.highRiskTables.size ? [...safety.highRiskTables].join(", ") : "none"}`,
         "",
         "Use db_schema for full column detail, db_table_info for exact counts and indexes on one table.",
@@ -257,15 +337,68 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     },
 
-    db_schema: async () => {
+    db_schema: async (args: z.infer<typeof HealthArgs>) => {
       const t0 = Date.now();
-      const tables = await getSchema(pool);
-      const text = schemaToText(tables) + "\n" + relationsToText(tables);
+      const { pool: p } = await resolveDb(args);
+      const tables = await getSchema(p);
+      const text = schemaToText(p, tables) + "\n" + relationsToText(p, tables);
       logRequest("db_schema", Date.now() - t0);
       return { content: [{ type: "text" as const, text }] };
     },
 
-    db_health: async () => {
+    db_health: async (args: z.infer<typeof HealthArgs>) => {
+      // --- Multi-database mode: show all databases (parallel) ---
+      if (connectionManager) {
+        const t0 = Date.now();
+        const dbList = connectionManager.list();
+        const targetName = args.database
+          ? connectionManager.resolve(args.database)
+          : null;
+
+        const checks = dbList
+          .filter((d) => !targetName || d.name === targetName)
+          .map(async (dbInfo) => {
+            const HEALTH_TIMEOUT_MS = 5000;
+            try {
+              const entry = await connectionManager.get(dbInfo.name);
+              if (!entry.pool) {
+                return [dbInfo.name, { status: "not_connected" }] as const;
+              }
+              const checkT0 = Date.now();
+              const checkPromise = entry.pool.query("SELECT 1");
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error("Health check timed out")), HEALTH_TIMEOUT_MS);
+              });
+              await Promise.race([checkPromise, timeoutPromise]);
+              const latencyMs = Date.now() - checkT0;
+              return [dbInfo.name, {
+                status: "connected",
+                connection: connectionSummary(entry.poolConfig),
+                readonly: entry.readonly,
+                pool: poolStats(entry.pool),
+                lastCheckLatencyMs: latencyMs,
+              }] as const;
+            } catch (err) {
+              return [dbInfo.name, {
+                status: "disconnected",
+                error: decodePgError(err, safety.mode),
+              }] as const;
+            }
+          });
+
+        const settled = await Promise.all(checks);
+        const results: Record<string, unknown> = Object.fromEntries(settled);
+
+        const latencyMs = Date.now() - t0;
+        logRequest("db_health", latencyMs);
+        return textResponse({
+          mode: "multi-database",
+          databases: results,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+
+      // --- Single-database mode (original behavior) ---
       const t0 = Date.now();
       try {
         await pool.query("SELECT 1");
@@ -305,15 +438,17 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
 
     db_table_info: async (args: z.infer<typeof TableInfoArgs>) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
-      const stats = await getTableStats(pool, table);
+      const { pool: p } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const stats = await getTableStats(p, table);
       logRequest("db_table_info", Date.now() - t0);
       return textResponse(stats);
     },
 
     db_find_many: async (args: z.infer<typeof FindManyArgs>) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
 
       const where = parseJsonObject(args.where, "where");
@@ -335,27 +470,28 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       );
 
       const [rowsResult, countResult] = await Promise.all([
-        pool.query(sql, whereFragment.values),
-        pool.query<{ count: number }>(countFragment.text, countFragment.values),
+        p.query(sql, whereFragment.values),
+        p.query<{ count: number }>(countFragment.text, countFragment.values),
       ]);
 
       const total = countResult.rows[0]?.count ?? 0;
       logRequest("db_find_many", Date.now() - t0);
 
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         count: rowsResult.rows.length,
         total,
         page: skip > 0 ? Math.floor(skip / take) + 1 : 1,
         pageSize: take,
         hasMore: skip + rowsResult.rows.length < total,
-        data: redactRows(rowsResult.rows, safety),
+        data: redactRows(rowsResult.rows, s),
       });
     },
 
     db_find_first: async (args: z.infer<typeof FindFirstArgs>) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
 
       const where = parseJsonObject(args.where, "where");
@@ -364,31 +500,33 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const whereFragment = buildWhere(where, validColumns, 1);
 
       const sql = `SELECT ${columns} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} LIMIT 1`;
-      const result = await pool.query(sql, whereFragment.values);
+      const result = await p.query(sql, whereFragment.values);
 
       logRequest("db_find_first", Date.now() - t0);
-      return textResponse(result.rows[0] ? redactRow(result.rows[0], safety) : null);
+      return textResponse(result.rows[0] ? redactRow(result.rows[0], s) : null);
     },
 
     db_count: async (args: z.infer<typeof CountArgs>) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
       const where = parseJsonObject(args.where, "where");
 
       const fragment = buildCount(qualifiedTable(table.schema, table.name), where, validColumns);
-      const result = await pool.query<{ count: number }>(fragment.text, fragment.values);
+      const result = await p.query<{ count: number }>(fragment.text, fragment.values);
 
       logRequest("db_count", Date.now() - t0);
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         count: result.rows[0]?.count ?? 0,
       });
     },
 
     db_aggregate: async (args: z.infer<typeof AggregateArgs>) => {
       const t0 = Date.now();
-      const table = await resolveTableName(pool, args.table);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
       const validColumns = columnSet(table);
 
       const groupCols = args.by
@@ -450,18 +588,19 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const groupClause = groupCols.map((c) => quoteIdent(c)).join(", ");
       const sql = `SELECT ${selectExprs.join(", ")} FROM ${qualifiedTable(table.schema, table.name)} ${whereFragment.text} GROUP BY ${groupClause} ${orderClause} LIMIT ${take}`;
 
-      const result = await pool.query(sql, whereFragment.values);
+      const result = await p.query(sql, whereFragment.values);
       logRequest("db_aggregate", Date.now() - t0);
       return textResponse({
-        table: tableDisplayName(table.schema, table.name),
+        table: tableDisplayName(getSchemas(p), table.schema, table.name),
         groupBy: groupCols,
         count: result.rows.length,
-        data: redactAggregateRows(result.rows, safety, groupCols, aggregates),
+        data: redactAggregateRows(result.rows, s, groupCols, aggregates),
       });
     },
 
     db_raw_query: async (args: z.infer<typeof RawQueryArgs>) => {
       const t0 = Date.now();
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
       const sql = args.sql.trim();
 
       const strippedSql = stripSqlStrings(sql).trim();
@@ -508,7 +647,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
             `LIMIT value (${limitValue}) exceeds maximum allowed (${MAX_RAW_TAKE}). Use a smaller limit or paginate.`,
           );
         }
-      } else if (safety.readonly) {
+      } else if (s.readonly) {
         throw new Error(
           "Raw write statements are blocked while the server is read-only (--readonly).",
         );
@@ -516,17 +655,19 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         throw new Error(
           "Only SELECT queries are allowed via db_raw_query. A non-SELECT statement requires explicit user confirmation (confirmed: true) and a server with ALLOW_RAW_WRITES enabled.",
         );
-      } else if (!config.allowRawWrites) {
+      } else if (!c.allowRawWrites) {
         throw new Error(
           "Raw write statements are disabled on this server. An operator must set ALLOW_RAW_WRITES=true to enable confirmed writes.",
         );
       }
 
       const execSql = sql.replace(/;\s*$/, "").trim();
-      const client = await pool.connect();
+      const client = await p.connect();
       try {
         await client.query("BEGIN");
-        await client.query(`SET LOCAL statement_timeout = ${config.statementTimeoutMs}`);
+        await client.query(`SET LOCAL statement_timeout = ${c.statementTimeoutMs}`);
+        // Note: the pool is already configured with statement_timeout via connection options.
+        // SET LOCAL overrides it for this transaction only, matching per-DB config in multi-DB mode.
         if (isSelect) {
           await client.query("SET LOCAL default_transaction_read_only = on");
         }
@@ -534,9 +675,9 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         await client.query("COMMIT");
         logRequest("db_raw_query", Date.now() - t0);
         if (isSelect) {
-          return textResponse(redactRows(result.rows, safety));
+          return textResponse(redactRows(result.rows, s));
         }
-        invalidateSchemaCache();
+        invalidateSchemaCache(p);
         return textResponse({
           command: result.command ?? "STATEMENT",
           rowCount: result.rowCount ?? 0,
@@ -544,8 +685,8 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         });
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
-        const suggestion = safety.mode === "development" ? await suggestDbNames(pool, err) : null;
-        const message = decodePgError(err, safety.mode);
+        const suggestion = s.mode === "development" ? await suggestDbNames(p, err) : null;
+        const message = decodePgError(err, s.mode);
         throw new Error(suggestion ? `${message} ${suggestion}` : message);
       } finally {
         client.release();
@@ -553,19 +694,20 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
     },
 
     db_create: async (args: z.infer<typeof CreateArgs>) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "create", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "create", s);
       if (access.blocked) throw new Error(access.message);
       const warnings = access.warning ? [access.warning] : [];
 
       const data = parseJsonObject(args.data, "data");
       if (!data) throw new Error("data parameter is required");
-      const { cleaned, stripped } = sanitizeWriteData(data, safety);
+      const { cleaned, stripped } = sanitizeWriteData(data, s);
 
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldCreate: cleaned,
           ...(stripped.length > 0 && { strippedFields: stripped }),
           ...(warnings.length > 0 && { warnings }),
@@ -576,21 +718,22 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       const validColumns = columnSet(table);
       const fragment = buildInsert(qualifiedTable(table.schema, table.name), cleaned, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          created: redactRow(result.rows[0], safety),
+          created: redactRow(result.rows[0], s),
           ...(stripped.length > 0 && { strippedFields: stripped }),
           ...(warnings.length > 0 && { warnings }),
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
 
     db_upsert: async (args: z.infer<typeof UpsertArgs>) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "upsert", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "upsert", s);
       if (access.blocked) throw new Error(access.message);
       const warnings = access.warning ? [access.warning] : [];
 
@@ -608,25 +751,25 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (!matched) {
         const available = table.uniqueColumnSets.map((s) => s.join("+")).join(", ") || "none";
         throw new Error(
-          `where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(table.schema, table.name)}". Available: ${available}`,
+          `where columns (${whereKeys.join(", ")}) don't match a unique constraint on "${tableDisplayName(getSchemas(p), table.schema, table.name)}". Available: ${available}`,
         );
       }
 
       const fullInsert = { ...where, ...createData };
       const { cleaned: cleanedInsert, stripped: strippedInsert } = sanitizeWriteData(
         fullInsert,
-        safety,
+        s,
       );
       const { cleaned: cleanedUpdate, stripped: strippedUpdate } = sanitizeWriteData(
         updateData,
-        safety,
+        s,
       );
       const stripped = [...new Set([...strippedInsert, ...strippedUpdate])];
 
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldInsert: cleanedInsert,
           wouldUpdate: cleanedUpdate,
           ...(stripped.length > 0 && { strippedFields: stripped }),
@@ -644,27 +787,28 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         validColumns,
       );
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          upserted: redactRow(result.rows[0], safety),
+          upserted: redactRow(result.rows[0], s),
           ...(stripped.length > 0 && { strippedFields: stripped }),
           ...(warnings.length > 0 && { warnings }),
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
 
     db_update_many: async (args: z.infer<typeof UpdateArgs>) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "update", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "update", s);
       if (access.blocked) throw new Error(access.message);
 
       const where = parseJsonObject(args.where, "where");
       const data = parseJsonObject(args.data, "data");
       if (!data) throw new Error("data parameter is required");
-      const { cleaned, stripped } = sanitizeWriteData(data, safety);
+      const { cleaned, stripped } = sanitizeWriteData(data, s);
 
       const validColumns = columnSet(table);
       const countFragment = buildCount(
@@ -672,7 +816,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         where,
         validColumns,
       );
-      const countResult = await pool.query<{ count: number }>(
+      const countResult = await p.query<{ count: number }>(
         countFragment.text,
         countFragment.values,
       );
@@ -683,7 +827,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           matched,
           wouldSet: cleaned,
           ...(stripped.length > 0 && { strippedFields: stripped }),
@@ -707,23 +851,24 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         validColumns,
       );
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           matched: result.rowCount ?? 0,
           ...(stripped.length > 0 && { strippedFields: stripped }),
           ...(warnings.length > 0 && { warnings }),
           message: `${result.rowCount ?? 0} row(s) updated.`,
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
 
     db_delete_many: async (args: z.infer<typeof DeleteArgs>) => {
-      const table = await resolveTableName(pool, args.table);
-      const access = checkWriteAccess(table.name, "delete", safety);
+      const { pool: p, safety: s } = await resolveDb(args);
+      const table = await resolveTableName(p, args.table);
+      const access = checkWriteAccess(table.name, "delete", s);
       if (access.blocked) throw new Error(access.message);
 
       const where = parseJsonObject(args.where, "where");
@@ -734,7 +879,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         where,
         validColumns,
       );
-      const countResult = await pool.query<{ count: number }>(
+      const countResult = await p.query<{ count: number }>(
         countFragment.text,
         countFragment.values,
       );
@@ -745,7 +890,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       if (args.dryRun) {
         return textResponse({
           dryRun: true,
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           wouldDelete: matched,
           ...(warnings.length > 0 && { warnings }),
           message: `DRY RUN -- ${matched} row(s) would be deleted.`,
@@ -762,21 +907,22 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
 
       const fragment = buildDelete(qualifiedTable(table.schema, table.name), where, validColumns);
       try {
-        const result = await pool.query(fragment.text, fragment.values);
-        invalidateSchemaCache();
+        const result = await p.query(fragment.text, fragment.values);
+        invalidateSchemaCache(p);
         return textResponse({
-          table: tableDisplayName(table.schema, table.name),
+          table: tableDisplayName(getSchemas(p), table.schema, table.name),
           deleted: result.rowCount ?? 0,
           ...(warnings.length > 0 && { warnings }),
           message: `${result.rowCount ?? 0} row(s) deleted.`,
         });
       } catch (err) {
-        throw new Error(decodePgError(err, safety.mode));
+        throw new Error(decodePgError(err, s.mode));
       }
     },
 
     db_backup: async (args: z.infer<typeof BackupArgs>) => {
-      const access = checkWriteAccess("backup", "backup", safety);
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
+      const access = checkWriteAccess("backup", "backup", s);
       if (access.blocked) throw new Error(access.message);
       if (!args.confirmed) {
         throw new Error(
@@ -784,18 +930,18 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         );
       }
 
-      const databaseUrl = process.env.DATABASE_URL;
-      if (!databaseUrl) throw new Error("DATABASE_URL is not set -- required to run pg_dump.");
+      const databaseUrl = typeof c.poolConfig.connectionString === "string" ? c.poolConfig.connectionString : null;
+      if (!databaseUrl) throw new Error("No connection string available -- required to run pg_dump.");
 
-      if (!existsSync(config.backupDir)) {
-        mkdirSync(config.backupDir, { recursive: true });
+      if (!existsSync(c.backupDir)) {
+        mkdirSync(c.backupDir, { recursive: true });
       }
 
       const now = new Date();
       const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const label = args.label ? `-${args.label.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "";
       const filename = `backup-${ts}${label}.sql`;
-      const filepath = resolve(config.backupDir, filename);
+      const filepath = resolve(c.backupDir, filename);
 
       const url = new URL(databaseUrl);
       const pgDumpArgs = [
@@ -827,7 +973,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
       } catch (err) {
         const missingBinary =
           typeof err === "object" && err !== null && (err as { code?: unknown }).code === "ENOENT";
-        if (config.dockerContainer && !missingBinary) {
+        if (c.dockerContainer && !missingBinary) {
           try {
             const user = decodeURIComponent(url.username || "postgres");
             const dbName = url.pathname.replace(/^\//, "") || "postgres";
@@ -835,7 +981,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
               "docker",
               [
                 "exec",
-                config.dockerContainer,
+                c.dockerContainer,
                 "pg_dump",
                 "-U",
                 user,
@@ -847,11 +993,11 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
               { encoding: "utf-8", timeout: 30000, maxBuffer: 1024 * 1024 * 100 },
             );
           } catch {
-            dump = await buildSqlDataDump(pool);
+            dump = await buildSqlDataDump(p);
             fallback = true;
           }
         } else if (missingBinary) {
-          dump = await buildSqlDataDump(pool);
+          dump = await buildSqlDataDump(p);
           fallback = true;
         } else {
           throw new Error(

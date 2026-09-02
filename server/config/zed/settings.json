@@ -5,8 +5,7 @@
       "args": [
         "-y",
         "pgautopilot"
-      ],
-      "env": {}
+      ]
     }
   }
 }

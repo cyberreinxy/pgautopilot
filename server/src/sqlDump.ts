@@ -63,7 +63,7 @@ async function listUserTables(pool: Pool): Promise<{ schema: string; name: strin
     `SELECT table_schema, table_name FROM information_schema.tables
      WHERE table_schema = ANY($1) AND table_type = 'BASE TABLE'
      ORDER BY table_schema, table_name`,
-    [getSchemas()],
+    [getSchemas(pool)],
   );
   return result.rows.map((r) => ({ schema: r.table_schema, name: r.table_name }));
 }

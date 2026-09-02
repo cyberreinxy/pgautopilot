@@ -46,38 +46,42 @@ function stubPool(tables: { table_schema: string; table_name: string }[]): Pool 
 }
 
 describe("schema configuration", () => {
+  let pool: Pool;
   beforeEach(() => {
-    invalidateSchemaCache();
-    setSchemas(["public"]);
+    pool = stubPool([]);
+    invalidateSchemaCache(pool);
+    setSchemas(pool, ["public"]);
   });
 
   it("defaults to public when nothing is configured", () => {
-    setSchemas([]);
-    expect(getSchemas()).toEqual(["public"]);
+    setSchemas(pool, []);
+    expect(getSchemas(pool)).toEqual(["public"]);
   });
 
   it("keeps configured schemas", () => {
-    setSchemas(["public", "auth"]);
-    expect(getSchemas()).toEqual(["public", "auth"]);
+    setSchemas(pool, ["public", "auth"]);
+    expect(getSchemas(pool)).toEqual(["public", "auth"]);
   });
 
   it("shows bare names for public-only and qualified names otherwise", () => {
-    setSchemas(["public"]);
-    expect(tableDisplayName("public", "users")).toBe("users");
-    setSchemas(["public", "auth"]);
-    expect(tableDisplayName("public", "users")).toBe("public.users");
-    expect(tableDisplayName("auth", "users")).toBe("auth.users");
+    setSchemas(pool, ["public"]);
+    expect(tableDisplayName(["public"], "public", "users")).toBe("users");
+    setSchemas(pool, ["public", "auth"]);
+    expect(tableDisplayName(["public", "auth"], "public", "users")).toBe("public.users");
+    expect(tableDisplayName(["public", "auth"], "auth", "users")).toBe("auth.users");
   });
 });
 
 describe("resolveTableName", () => {
+  let pool: Pool;
   beforeEach(() => {
-    invalidateSchemaCache();
-    setSchemas(["public", "auth"]);
+    pool = stubPool([]);
+    invalidateSchemaCache(pool);
+    setSchemas(pool, ["public", "auth"]);
   });
 
   it("resolves a unique bare name across schemas", async () => {
-    const pool = stubPool([
+    pool = stubPool([
       { table_schema: "public", table_name: "users" },
       { table_schema: "auth", table_name: "sessions" },
     ]);
@@ -87,7 +91,7 @@ describe("resolveTableName", () => {
   });
 
   it("resolves a schema-qualified name", async () => {
-    const pool = stubPool([
+    pool = stubPool([
       { table_schema: "public", table_name: "users" },
       { table_schema: "auth", table_name: "users" },
     ]);
@@ -96,7 +100,7 @@ describe("resolveTableName", () => {
   });
 
   it("rejects ambiguous bare names", async () => {
-    const pool = stubPool([
+    pool = stubPool([
       { table_schema: "public", table_name: "users" },
       { table_schema: "auth", table_name: "users" },
     ]);
@@ -105,13 +109,15 @@ describe("resolveTableName", () => {
 });
 
 describe("getOverviewRowCounts", () => {
+  let pool: Pool;
   beforeEach(() => {
-    invalidateSchemaCache();
-    setSchemas(["public", "auth"]);
+    pool = stubPool([]);
+    invalidateSchemaCache(pool);
+    setSchemas(pool, ["public", "auth"]);
   });
 
   it("falls back to exact COUNT when the planner estimate is zero", async () => {
-    const pool = stubPool([
+    pool = stubPool([
       { table_schema: "public", table_name: "users" },
       { table_schema: "auth", table_name: "sessions" },
     ]);

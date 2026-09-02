@@ -58,6 +58,7 @@ You: "Show me customers that spent more than $500."
 - [Docker](#docker)
 - [Run your own PostgreSQL (no Docker)](#run-your-own-postgresql-no-docker)
 - [Configuration](#configuration)
+- [Multi-Database](#multi-database)
 - [Performance](#performance)
 - [Compatibility](#compatibility)
 - [Software Signing](#software-signing)
@@ -404,6 +405,49 @@ pgautopilot --readonly --mode=production
 
 **Cloud SSL:** cloud providers (Neon, Supabase, RDS, Render) need SSL; set
 `PGSSLMODE=require` (stronger: `verify-full`); auto-detected for most providers.
+
+---
+
+## Multi-Database
+
+PGAutoPilot can connect to multiple PostgreSQL databases simultaneously.
+Single-database users: your existing `.env` setup works unchanged.
+
+Create `pgautopilot.json` in your project root:
+
+```json
+{
+  "databases": {
+    "users_db": {
+      "url": "postgresql://user:pass@localhost:5432/users"
+    },
+    "analytics": {
+      "url": "postgresql://user:pass@localhost:5432/analytics",
+      "readonly": true
+    }
+  },
+  "defaults": { "readonly": true }
+}
+```
+
+**Available tools in multi-database mode:**
+
+| Tool | Description |
+|------|-------------|
+| `db_list_databases` | List all databases with status |
+| `db_use_database` | Switch the default database |
+| `db_health` | Health-check all or one database |
+| `db_overview` ... `db_delete_many` | All tools accept optional `database` param |
+
+**CLI:** `pgautopilot --database=analytics` sets the default at startup.
+
+**Environment variable interpolation:** keep secrets in `.env`, reference them:
+
+```json
+{ "databases": { "prod": { "url": "$PROD_DATABASE_URL" } } }
+```
+
+Full guide: [docs/MULTI-DATABASE.md](docs/MULTI-DATABASE.md)
 
 ---
 

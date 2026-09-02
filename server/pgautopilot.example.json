@@ -1,0 +1,26 @@
+{
+  "databases": {
+    "users_db": {
+      "url": "postgresql://user:password@localhost:5432/users",
+      "readonly": false,
+      "schemas": ["public"],
+      "statement_timeout_ms": 10000
+    },
+    "analytics": {
+      "url": "postgresql://user:password@localhost:5432/analytics",
+      "readonly": true,
+      "schemas": ["public", "reporting"],
+      "statement_timeout_ms": 30000
+    },
+    "staging": {
+      "url": "$STAGING_DATABASE_URL",
+      "readonly": false
+    }
+  },
+  "defaults": {
+    "readonly": true,
+    "schemas": ["public"],
+    "statement_timeout_ms": 10000,
+    "pool_max": 5
+  }
+}

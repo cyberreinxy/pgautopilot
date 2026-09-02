@@ -1,7 +1,34 @@
 import { z } from "zod";
 
+// ---------------------------------------------------------------------------
+// Shared: optional database selector for multi-database mode
+// ---------------------------------------------------------------------------
+
+const DatabaseArg = z.object({
+  database: z
+    .string()
+    .optional()
+    .describe(
+      "Name of the database to query (from pgautopilot.json). " +
+        "Omit to use the current default database.",
+    ),
+});
+
+export const HealthArgs = DatabaseArg;
+
+// ---------------------------------------------------------------------------
+// Table-based tools: table + optional database
+// ---------------------------------------------------------------------------
+
 const TableArg = z.object({
   table: z.string().describe("Name of the table to query"),
+  database: z
+    .string()
+    .optional()
+    .describe(
+      "Name of the database to query (from pgautopilot.json). " +
+        "Omit to use the current default database.",
+    ),
 });
 
 export const FindManyArgs = TableArg.extend({
@@ -37,7 +64,11 @@ export const AggregateArgs = TableArg.extend({
 
 export const TableInfoArgs = TableArg;
 
-export const RawQueryArgs = z.object({
+// ---------------------------------------------------------------------------
+// Raw query & backup: no table, but optional database
+// ---------------------------------------------------------------------------
+
+export const RawQueryArgs = DatabaseArg.extend({
   sql: z
     .string()
     .describe(
@@ -50,7 +81,7 @@ export const RawQueryArgs = z.object({
     .describe("Explicit user confirmation to allow a single non-SELECT (write/DDL) statement"),
 });
 
-export const BackupArgs = z.object({
+export const BackupArgs = DatabaseArg.extend({
   label: z.string().optional().describe("Optional label for the backup filename"),
   confirmed: z
     .boolean()
@@ -58,6 +89,10 @@ export const BackupArgs = z.object({
     .default(false)
     .describe("Explicit user confirmation required to run a backup"),
 });
+
+// ---------------------------------------------------------------------------
+// Write tools: table + data + optional database
+// ---------------------------------------------------------------------------
 
 export const CreateArgs = TableArg.extend({
   data: z.string().describe("JSON object of column values to insert"),
@@ -92,6 +127,20 @@ export const DeleteArgs = TableArg.extend({
     .describe("Required to delete all rows when where is '{}'"),
 });
 
+// ---------------------------------------------------------------------------
+// New multi-database tools
+// ---------------------------------------------------------------------------
+
+export const ListDatabasesArgs = z.object({});
+
+export const UseDatabaseArgs = z.object({
+  database: z.string().describe("Name of the database to switch to as the default"),
+});
+
+// ---------------------------------------------------------------------------
+// Tool annotations
+// ---------------------------------------------------------------------------
+
 const readOnly = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -105,6 +154,10 @@ const write = {
   openWorldHint: false,
 };
 
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
+
 export const toolDefinitions = {
   mcp_status: {
     title: "MCP Server Status",
@@ -115,12 +168,33 @@ export const toolDefinitions = {
     inputSchema: {},
     annotations: readOnly,
   },
+  db_list_databases: {
+    title: "List Databases",
+    description:
+      "List all configured databases with their connection status, host, and read-only setting. " +
+      "Call this first in multi-database mode to see available database names.",
+    inputSchema: ListDatabasesArgs,
+    annotations: readOnly,
+  },
+  db_use_database: {
+    title: "Switch Default Database",
+    description:
+      "Switch the default database for subsequent queries. After switching, all tools " +
+      "without an explicit database parameter will use this database.",
+    inputSchema: UseDatabaseArgs,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
   db_overview: {
     title: "Database Overview",
     description:
       "Overview of the connected database: tables with approximate row counts, foreign key " +
       "relationships, server mode, and safety rules. Call this first when exploring a database.",
-    inputSchema: {},
+    inputSchema: DatabaseArg,
     annotations: readOnly,
   },
   db_schema: {
@@ -128,13 +202,15 @@ export const toolDefinitions = {
     description:
       "Full schema with column-level detail and a relationship diagram, introspected live " +
       "from the connected PostgreSQL database.",
-    inputSchema: {},
+    inputSchema: DatabaseArg,
     annotations: readOnly,
   },
   db_health: {
     title: "Database Health",
-    description: "Check database connectivity, pool stats, uptime, and request count.",
-    inputSchema: {},
+    description:
+      "Check database connectivity, pool stats, uptime, and request count. " +
+      "In multi-database mode, omit the database parameter to see stats for all databases.",
+    inputSchema: HealthArgs,
     annotations: readOnly,
   },
   db_table_info: {

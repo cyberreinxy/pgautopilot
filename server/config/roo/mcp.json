@@ -6,7 +6,6 @@
         "-y",
         "pgautopilot"
       ],
-      "env": {},
       "alwaysAllow": [],
       "disabled": false
     }

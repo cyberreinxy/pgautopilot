@@ -79,52 +79,56 @@ function firstText(result: { content: { type: string; text: string }[] }): unkno
 }
 
 describe("db_raw_query validation", () => {
-  beforeEach(() => invalidateSchemaCache());
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
 
   it("rejects multi-statement SQL", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT 1; SELECT 2", confirmed: false }),
     ).rejects.toThrow(/Multi-statement/);
   });
 
   it("rejects non-SELECT SQL", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "DELETE FROM users", confirmed: false }),
     ).rejects.toThrow(/Only SELECT/);
   });
 
   it("blocks authentication catalog queries", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT * FROM pg_authid LIMIT 1", confirmed: false }),
     ).rejects.toThrow(/authentication catalogs/);
   });
 
   it("rejects dangerous functions", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT pg_sleep(10) LIMIT 1", confirmed: false }),
     ).rejects.toThrow(/Dangerous/);
   });
 
   it("requires a terminal LIMIT clause", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT * FROM users", confirmed: false }),
     ).rejects.toThrow(/LIMIT/);
   });
 
   it("does not accept a fake LIMIT inside a string literal", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT 'LIMIT 1' FROM users", confirmed: false }),
     ).rejects.toThrow(/LIMIT/);
   });
 
   it("rejects LIMIT above the cap", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_raw_query({ sql: "SELECT * FROM users LIMIT 99999", confirmed: false }),
     ).rejects.toThrow(/exceeds maximum/);
@@ -132,14 +136,14 @@ describe("db_raw_query validation", () => {
 
   it("blocks raw writes in read-only mode even when confirmed and enabled", async () => {
     const config = { ...CONFIG, allowRawWrites: true };
-    const handlers = createHandlers(createStubPool(), readonlySafety(), config);
+    const handlers = createHandlers(pool, readonlySafety(), config);
     await expect(
       handlers.db_raw_query({ sql: "UPDATE users SET email='x'", confirmed: true }),
     ).rejects.toThrow(/read-only/);
   });
 
   it("accepts a valid SELECT with terminal LIMIT", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     const result = await handlers.db_raw_query({
       sql: "SELECT id FROM users LIMIT 5",
       confirmed: false,
@@ -149,10 +153,14 @@ describe("db_raw_query validation", () => {
 });
 
 describe("db_aggregate redaction", () => {
-  beforeEach(() => invalidateSchemaCache());
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
 
   it("redacts group-by and aggregate columns derived from sensitive columns", async () => {
-    const pool = createStubPool((text) => {
+    pool = createStubPool((text) => {
       if (String(text).startsWith("SELECT")) {
         return [{ password: "hunter2", count: 3, min_password: "aaa" }];
       }
@@ -174,10 +182,14 @@ describe("db_aggregate redaction", () => {
 });
 
 describe("db_update_many confirmAll gate", () => {
-  beforeEach(() => invalidateSchemaCache());
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
 
   it("refuses to update all rows without confirmAll", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     await expect(
       handlers.db_update_many({
         table: "users",
@@ -190,7 +202,7 @@ describe("db_update_many confirmAll gate", () => {
   });
 
   it("allows updating all rows with confirmAll", async () => {
-    const handlers = createHandlers(createStubPool(), developmentSafety(), CONFIG);
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
     const result = await handlers.db_update_many({
       table: "users",
       where: "{}",
@@ -203,11 +215,15 @@ describe("db_update_many confirmAll gate", () => {
 });
 
 describe("db_create high-risk warning", () => {
-  beforeEach(() => invalidateSchemaCache());
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
 
   it("surfaces a HIGH-RISK warning on dry-run writes", async () => {
     const safety = buildSafetyState(false, "development", new Set(), new Set(), new Set(["users"]));
-    const handlers = createHandlers(createStubPool(), safety, CONFIG);
+    const handlers = createHandlers(pool, safety, CONFIG);
     const result = await handlers.db_create({
       table: "users",
       data: '{"email":"a@b.com"}',

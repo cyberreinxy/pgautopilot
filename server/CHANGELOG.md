@@ -1,5 +1,97 @@
 # Changelog
 
+## 2.3.0 (2026-09-02)
+
+### Multi-Database Support
+
+This is a major feature release. PGAutoPilot can now connect to multiple PostgreSQL
+databases simultaneously. Single-database users: your existing `.env` setup works
+unchanged — no breaking changes.
+
+- **Added:** `ConnectionManager` — manages multiple named database connections with lazy
+  connect, per-database safety policies, and automatic reconnect on broken pools.
+- **Added:** `pgautopilot.json` config file — define multiple databases with per-database
+  `url`, `readonly`, `schemas`, `blocked_tables`, `sensitive_columns`, `statement_timeout_ms`,
+  and `pool_max`. Supports `$VAR` and `${VAR}` environment variable interpolation.
+- **Added:** `database` parameter on all 15 tools — query any database by name without
+  restarting the server. Example: `db_find_many(table="orders", database="analytics")`.
+- **Added:** `db_list_databases` tool — discover all configured databases with status,
+  connection info, and read-only setting.
+- **Added:** `db_use_database` tool — switch the default database at runtime.
+- **Added:** `--database=<name>` CLI flag — set the default database at startup.
+- **Added:** `db_health` multi-database mode — parallel health checks with 5s per-DB
+  timeout. Omit `database` param to check all databases.
+- **Added:** Config hot-reload — watches `pgautopilot.json` for changes, adds new
+  databases without restart.
+- **Added:** JSON Schema (`pgautopilot.schema.json`) for `pgautopilot.json` validation.
+- **Added:** Startup connectivity check — probes all configured databases at boot.
+
+### Bug Fixes
+
+- **Fixed:** `db_backup` now uses the resolved pool's connection string instead of
+  hardcoded `process.env.DATABASE_URL` — works correctly in multi-DB mode.
+- **Fixed:** Schema cache is now per-pool (WeakMap) — switching databases no longer
+  serves stale schema data from the previous database.
+- **Fixed:** `setSchemas()` is now scoped per-pool — different databases can have
+  different schema lists without interfering.
+- **Fixed:** `resolveSsl` applied to per-database pool configs — each database
+  respects `PGSSLMODE` independently.
+- **Fixed:** `db_raw_query` uses per-database `statementTimeoutMs` instead of the
+  global config value.
+- **Fixed:** Race condition in `ConnectionManager.get()` — concurrent connect attempts
+  for the same database are deduplicated.
+- **Fixed:** `db_health` sequential checks replaced with parallel checks + 5s
+  per-database timeout — one slow database no longer blocks all others.
+- **Fixed:** `configWatcher` uses proper ESM import instead of `require("fs")`.
+- **Fixed:** `configWatcher` reload handles per-database errors gracefully — one
+  bad entry no longer kills the entire reload.
+- **Fixed:** `buildDatabaseEntry` catches invalid URLs with clear error messages
+  instead of crashing.
+
+### Reliability
+
+- **Added:** Exponential backoff in `waitForConnection` — retries at 2s, 4s, 8s
+  instead of fixed intervals. Helps with flaky cloud databases.
+- **Added:** Connection reconnect — `ConnectionManager.get()` verifies pool health
+  with `SELECT 1` and automatically reconnects broken pools.
+
+### IDE Configs
+
+- **Fixed:** Removed empty `env: {}` from Cline, Roo, Zed, and Continue configs
+  that was silently blocking environment variable inheritance.
+
+### Postinstall
+
+- **Fixed:** Deep merge in `writeEditorConfig` — preserves user customizations
+  (env vars, disabled flags, custom args) instead of overwriting.
+- **Fixed:** Template deep clone — prevents shared references between config entries.
+- **Fixed:** JSON validation before every write — corrupt output is caught.
+- **Fixed:** `.env.example` template updated with multi-database documentation.
+- **Fixed:** Install banner mentions multi-database support.
+
+### Documentation
+
+- **Added:** `docs/MULTI-DATABASE.md` — complete user guide with quick start,
+  config format, examples (monorepo, dev/staging/prod, read replicas),
+  security, troubleshooting, and migration guide.
+- **Updated:** `README.md` — added Multi-Database section with config example,
+  tool table, and link to full guide.
+- **Updated:** `config/README.md` — added Multi-Database Mode section.
+- **Updated:** `.env.example` — added multi-database configuration comments.
+
+### Tests
+
+- **Added:** `tests/connectionManager.test.ts` — 19 tests for register, resolve,
+  list, closeAll, buildDatabaseEntry, safety state.
+- **Added:** `tests/multiDbConfig.test.ts` — 20 tests for config parsing, env var
+  interpolation, validation errors (invalid names, URLs, protocols).
+- **Added:** `tests/multiDbIntegration.test.ts` — 12 tests for full multi-DB flow:
+  list, switch, health, per-DB routing, write safety enforcement.
+- **Updated:** `tests/postinstall.test.ts` — added deep merge preservation test.
+- **Updated:** `tests/schema.test.ts` — updated for per-pool schema signatures.
+- **Updated:** `tests/toolHandlers.test.ts` — updated for per-pool invalidateSchemaCache.
+- **Total:** 112 tests, all passing.
+
 ## 2.2.2 (2026-09-01)
 
 - **Fixed:** bump `zod` to `^3.25.28 || ^4.0.0` to satisfy `@modelcontextprotocol/sdk@1.30.0` (`zod@"^3.25 || ^4.0"`) and `zod-to-json-schema@3.25.2` (`zod@"^3.25.28 || ^4"`) peers — removes `pnpm install` unmet peer `found 3.23.8` warning when consumed by projects on `zod@4.4.3` (e.g. `StudentsManagemenSystem`).
