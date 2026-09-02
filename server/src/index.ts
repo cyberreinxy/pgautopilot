@@ -4,7 +4,7 @@ import { loadConfig, detectConfigMode, connectionSummary, isLocalHost } from "./
 import { createPool, waitForConnection } from "./db.js";
 import { buildSafetyState } from "./safety.js";
 import { toolDefinitions } from "./toolDefinitions.js";
-import { createHandlers } from "./toolHandlers.js";
+import { createHandlers, getPgVersion } from "./toolHandlers.js";
 import { ConnectionManager, buildDatabaseEntry } from "./connectionManager.js";
 import { watchConfig } from "./configWatcher.js";
 import { log } from "./logger.js";
@@ -181,15 +181,9 @@ async function setupServer(server: McpServer, argv: string[]) {
     try {
       await waitForConnection(pool, 5, 2000);
       log.info(`Connected to ${connectionSummary(config.poolConfig)}`);
-      // Detect PostgreSQL version
-      try {
-        const ver = await pool.query("SELECT version()");
-        const pgVersion = ver.rows[0]?.version as string ?? "unknown";
-        log.info(`PostgreSQL: ${pgVersion}`);
-        config.pgVersion = pgVersion;
-      } catch {
-        // Version detection is best-effort
-      }
+      const pgVersion = await getPgVersion(pool);
+      log.info(`PostgreSQL: ${pgVersion}`);
+      config.pgVersion = pgVersion;
     } catch (err) {
       log.error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
       log.error("Ensure DATABASE_URL points to a reachable PostgreSQL instance.");
@@ -353,15 +347,9 @@ async function setupServer(server: McpServer, argv: string[]) {
   let pgVersion = "unknown";
   try {
     defaultEntry = await manager.connectDefault();
-    // Detect PostgreSQL version
     if (defaultEntry?.pool) {
-      try {
-        const ver = await defaultEntry.pool.query("SELECT version()");
-        pgVersion = ver.rows[0]?.version as string ?? "unknown";
-        log.info(`PostgreSQL: ${pgVersion}`);
-      } catch {
-        // Version detection is best-effort
-      }
+      pgVersion = await getPgVersion(defaultEntry.pool);
+      log.info(`PostgreSQL: ${pgVersion}`);
     }
   } catch (err) {
     log.error(`Failed to connect to default database: ${err instanceof Error ? err.message : String(err)}`);

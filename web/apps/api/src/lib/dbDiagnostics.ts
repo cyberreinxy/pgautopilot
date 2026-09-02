@@ -35,13 +35,10 @@ export function createDbDiagnostics(pool: Pool, logger: Logger): DbDiagnostics {
   let lastError: { message: string; at: string } | null = null;
   let lastSuccessAt: string | null = null;
 
-  const poolAny = pool as unknown as { on?: (event: string, fn: (err: unknown) => void) => void };
-  if (typeof poolAny.on === "function") {
-    poolAny.on("error", (err) => {
-      lastError = { message: describePgError(err), at: new Date().toISOString() };
-      logger.error("PostgreSQL pool error", { error: rawMessage(err) });
-    });
-  }
+  pool.on("error", (err) => {
+    lastError = { message: describePgError(err), at: new Date().toISOString() };
+    logger.error("PostgreSQL pool error", { error: rawMessage(err) });
+  });
 
   return {
     get lastError() {
@@ -51,11 +48,10 @@ export function createDbDiagnostics(pool: Pool, logger: Logger): DbDiagnostics {
       return lastSuccessAt;
     },
     poolStats(): PoolStats {
-      const p = pool as unknown as Partial<Pool>;
       return {
-        totalCount: p.totalCount ?? 0,
-        idleCount: p.idleCount ?? 0,
-        waitingCount: p.waitingCount ?? 0,
+        totalCount: pool.totalCount,
+        idleCount: pool.idleCount,
+        waitingCount: pool.waitingCount,
       };
     },
     async ping(): Promise<PingResult> {

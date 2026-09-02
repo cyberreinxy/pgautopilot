@@ -73,6 +73,17 @@ import { log } from "./logger.js";
 const MAX_TAKE = 500;
 const MAX_RAW_TAKE = 5000;
 
+// Detect PostgreSQL version from a pool. Returns "unknown" on failure.
+export async function getPgVersion(pool: Pool): Promise<string> {
+  interface VersionRow { version: string }
+  try {
+    const result = await pool.query<VersionRow>("SELECT version()");
+    return result.rows[0]?.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 function toNonNegativeInt(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isInteger(n) && n >= 0 ? n : fallback;
@@ -566,14 +577,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
               await Promise.race([checkPromise, timeoutPromise]);
               const latencyMs = Date.now() - checkT0;
 
-              // Detect PostgreSQL version for this database
-              let pgVersion = "unknown";
-              try {
-                const ver = await entry.pool.query("SELECT version()");
-                pgVersion = ver.rows[0]?.version as string ?? "unknown";
-              } catch {
-                // Best-effort
-              }
+              const pgVersion = await getPgVersion(entry.pool);
 
               // Run full health checks (best-effort, don't fail connectivity)
               let healthChecks: Record<string, unknown> = {};
@@ -620,14 +624,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         lastSuccessAt = Date.now();
         const uptime = Math.floor((Date.now() - startTime) / 1000);
 
-        // Detect PostgreSQL version
-        let pgVersion = "unknown";
-        try {
-          const ver = await pool.query("SELECT version()");
-          pgVersion = ver.rows[0]?.version as string ?? "unknown";
-        } catch {
-          // Best-effort
-        }
+        const pgVersion = await getPgVersion(pool);
 
         // Run extended health checks in parallel (best-effort, don't fail the whole check)
         const healthChecks = await runHealthChecks(pool, safety.mode);

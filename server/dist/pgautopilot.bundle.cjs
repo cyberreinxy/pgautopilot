@@ -48205,6 +48205,14 @@ function execFileAsync(file2, args, options) {
 }
 var MAX_TAKE = 500;
 var MAX_RAW_TAKE = 5e3;
+async function getPgVersion(pool) {
+  try {
+    const result = await pool.query("SELECT version()");
+    return result.rows[0]?.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 function toNonNegativeInt(value, fallback) {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isInteger(n) && n >= 0 ? n : fallback;
@@ -48570,12 +48578,7 @@ function createHandlers(pool, safety, config2, connectionManager) {
             });
             await Promise.race([checkPromise, timeoutPromise]);
             const latencyMs2 = Date.now() - checkT0;
-            let pgVersion = "unknown";
-            try {
-              const ver = await entry.pool.query("SELECT version()");
-              pgVersion = ver.rows[0]?.version ?? "unknown";
-            } catch {
-            }
+            const pgVersion = await getPgVersion(entry.pool);
             let healthChecks = {};
             try {
               healthChecks = await runHealthChecks(entry.pool, "development");
@@ -48613,12 +48616,7 @@ function createHandlers(pool, safety, config2, connectionManager) {
         const latencyMs = Date.now() - t0;
         lastSuccessAt = Date.now();
         const uptime = Math.floor((Date.now() - startTime) / 1e3);
-        let pgVersion = "unknown";
-        try {
-          const ver = await pool.query("SELECT version()");
-          pgVersion = ver.rows[0]?.version ?? "unknown";
-        } catch {
-        }
+        const pgVersion = await getPgVersion(pool);
         const healthChecks = await runHealthChecks(pool, safety.mode);
         logRequest("db_health", latencyMs);
         return textResponse({
@@ -51520,13 +51518,9 @@ async function setupServer(server, argv) {
     try {
       await waitForConnection(pool2, 5, 2e3);
       log.info(`Connected to ${connectionSummary(config3.poolConfig)}`);
-      try {
-        const ver = await pool2.query("SELECT version()");
-        const pgVersion3 = ver.rows[0]?.version ?? "unknown";
-        log.info(`PostgreSQL: ${pgVersion3}`);
-        config3.pgVersion = pgVersion3;
-      } catch {
-      }
+      const pgVersion3 = await getPgVersion(pool2);
+      log.info(`PostgreSQL: ${pgVersion3}`);
+      config3.pgVersion = pgVersion3;
     } catch (err) {
       log.error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
       log.error("Ensure DATABASE_URL points to a reachable PostgreSQL instance.");
@@ -51679,12 +51673,8 @@ Start by asking for the query, or run db_explain if you already have it.`
   try {
     defaultEntry = await manager.connectDefault();
     if (defaultEntry?.pool) {
-      try {
-        const ver = await defaultEntry.pool.query("SELECT version()");
-        pgVersion = ver.rows[0]?.version ?? "unknown";
-        log.info(`PostgreSQL: ${pgVersion}`);
-      } catch {
-      }
+      pgVersion = await getPgVersion(defaultEntry.pool);
+      log.info(`PostgreSQL: ${pgVersion}`);
     }
   } catch (err) {
     log.error(`Failed to connect to default database: ${err instanceof Error ? err.message : String(err)}`);
