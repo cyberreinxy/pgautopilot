@@ -51456,7 +51456,7 @@ async function main() {
       const s = new McpServer({
         name: "pgautopilot",
         title: "PGAutoPilot -- PostgreSQL AI Assistant",
-        version: "2.3.0"
+        version: "2.4.0"
       });
       await setupServer(s, argv);
       return { server: s, cleanup: async () => {
@@ -51468,12 +51468,12 @@ async function main() {
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
-    version: "2.3.0"
+    version: "2.4.0"
   });
   await setupServer(server, argv);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  log.info("PGAutoPilot v2.3.0 ready");
+  log.info("PGAutoPilot v2.4.0 ready");
 }
 async function setupServer(server, argv) {
   let configMode = null;
@@ -51552,7 +51552,7 @@ async function setupServer(server, argv) {
           mimeType: "application/json",
           text: JSON.stringify({
             name: "pgautopilot",
-            version: "2.3.0",
+            version: "2.4.0",
             postgresqlVersion: pgVersion2,
             mode: safety2.mode,
             readonly: safety2.readonly,
@@ -51610,7 +51610,7 @@ Start by asking for the query, or run db_explain if you already have it.`
     }));
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    log.info("PGAutoPilot v2.3.0 ready");
+    log.info("PGAutoPilot v2.4.0 ready");
     log.info(`Connection: ${connectionSummary(config3.poolConfig)}`);
     log.info(`Mode: ${safety2.mode} | Read-only: ${safety2.readonly ? "yes" : "no"}`);
     if (safety2.blockedTables.size > 0) {
@@ -51627,7 +51627,7 @@ Start by asking for the query, or run db_explain if you already have it.`
   }
   const resolved = configMode.resolved;
   const multiDb = resolved.multiDbConfig;
-  log.info("PGAutoPilot v2.3.0 starting in multi-database mode");
+  log.info("PGAutoPilot v2.4.0 starting in multi-database mode");
   log.info(`Databases configured: ${Object.keys(multiDb.databases).join(", ")}`);
   const manager = new ConnectionManager();
   const dbNames = Object.keys(multiDb.databases);
@@ -51743,7 +51743,7 @@ Start by asking for the query, or run db_explain if you already have it.`
         mimeType: "application/json",
         text: JSON.stringify({
           name: "pgautopilot",
-          version: "2.3.0",
+          version: "2.4.0",
           postgresqlVersion: pgVersion,
           mode: "multi-database",
           defaultDatabase: manager.getDefaultName(),
