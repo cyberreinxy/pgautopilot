@@ -13,7 +13,7 @@
 
 [![Sponsor cyberreinxy](https://img.shields.io/badge/Sponsor-cyberreinxy-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/cyberreinxy)
 
-`npx pgautopilot` · `npm install -g pgautopilot`
+`npm install pgautopilot --save-dev`
 
 ---
 
@@ -74,31 +74,14 @@ You: "Show me customers that spent more than $500."
 
 **Requirements:** Node.js 18+ · PostgreSQL 12+ (local, remote, Docker, or cloud) · any MCP-compatible client.
 
-**npm:**
-
 ```bash
-npm install -g pgautopilot
+cd your-project
+npm install pgautopilot --save-dev
 ```
 
-**No npm, one-line installer** (clones, adds to PATH; re-run to update):
+This installs PGAutoPilot into your project. Each project gets its own `.env`, `pgautopilot.json`, and safety rules. No global state, no conflicts between projects.
 
-| Platform  | Command                                                                                        |
-| --------- | ---------------------------------------------------------------------------------------------- |
-| Linux/mac | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.sh \| bash` |
-| Windows   | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/install.ps1 \| iex`        |
-
-**Download & run:** `node pgautopilot.bundle.cjs`
-
-**Clone & run:** `git clone https://github.com/cyberreinxy/pgautopilot.git && cd pgautopilot && node dist/pgautopilot.bundle.cjs`
-
-**Uninstall:**
-
-| Platform  | Command                                                                                          |
-| --------- | ------------------------------------------------------------------------------------------------ |
-| Linux/mac | `curl -fsSL https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.sh \| bash` |
-| Windows   | `irm https://raw.githubusercontent.com/cyberreinxy/pgautopilot/main/uninstall.ps1 \| iex`        |
-
-Installs are idempotent and signed; see [Software Signing](#software-signing).
+> **Uninstall:** `npm uninstall pgautopilot`
 
 ---
 
@@ -110,20 +93,93 @@ Claude Desktop · Cursor · VS Code + Copilot · Gemini CLI · Windsurf · Zed �
 
 ## Quick Start
 
-Create a `.env` anywhere on your machine (PGAutoPilot finds it automatically):
+### 1. Install in your project
+
+```bash
+# In your project directory
+npm install pgautopilot --save-dev
+```
+
+### 2. Create `.env` in your project root
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/yourdb
 ```
 
-Connect your AI assistant, identical config for VS Code, Cursor, Windsurf,
-Claude Desktop, Zed, JetBrains, Neovim:
+> **Where is "project root"?** The directory your AI assistant opens as the
+> workspace — where your `package.json`, `src/`, etc. live. PGAutoPilot reads
+> `.env` from the MCP server's working directory, which is set by `cwd` in
+> the MCP config below.
+
+### 3. Configure your AI assistant
+
+Pick the config for your editor and place it where your client expects.
+Each config includes `cwd` pointing to your project root so PGAutoPilot
+finds your `.env` and `pgautopilot.json`:
+
+**Cursor** → `.cursor/mcp.json`:
 
 ```json
-{ "mcpServers": { "postgres": { "command": "pgautopilot" } } }
+{
+  "mcpServers": {
+    "pgautopilot": {
+      "command": "npx",
+      "args": ["pgautopilot"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
 ```
 
+**VS Code + Copilot** → `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "pgautopilot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["pgautopilot"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
+```
+
+**Claude Desktop** → `%APPDATA%/Claude/claude_desktop_config.json` (global config, no `cwd` support — set `DATABASE_URL` via env var or in the config):
+
+```json
+{
+  "mcpServers": {
+    "pgautopilot": {
+      "command": "pgautopilot",
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/yourdb"
+      }
+    }
+  }
+}
+```
+
+> Full configs for all 14 supported clients are in [`config/`](config/README.md).
+> Copy the one matching your editor to the target location.
+
+### 4. Start asking questions
+
 Then just ask: _"Show me all tables."_ · _"How many users signed up this month?"_ · _"Find orders over $500 by customer."_ · _"Add a product called 'Widget Pro' at $29.99."_
+
+### Why project-scoped?
+
+PGAutoPilot reads `.env` and `pgautopilot.json` from its working directory
+(set by `cwd` in the MCP config). This means:
+
+- **Each project gets its own `DATABASE_URL`** — no conflicts between projects.
+- **Each project can have its own `pgautopilot.json`** with different safety rules.
+- **No global state** — switching projects just means switching your editor workspace.
+
+If you install globally, the server's working directory depends on how your
+MCP client launches it, which is unpredictable. Project-scoped install avoids
+this entirely.
 
 > Without Docker? Get a local database running in minutes with
 > [Run your own PostgreSQL (no Docker)](#run-your-own-postgresql-no-docker).
@@ -148,7 +204,7 @@ AI Assistant
 |  Safety Policy Engine     <----+  |
 |  SQL Builder                   |  |
 |  Connection Pool               |  |
-|  Tool Handlers (14 tools)      |  |
+|  Tool Handlers (18 tools)      |  |
 +---------------------------------+ |
         |                          |
         v                          |
@@ -496,7 +552,7 @@ Install scripts verify `checksums.txt` automatically after cloning. On mismatch,
 
 **Does it work with Supabase?** Yes, use the Supabase connection string and `PGSSLMODE=require`.
 
-**Does it require npm?** No, npm, the one-line installer, or the single-file bundle all work.
+**Does it require npm?** Yes, for installation. The tool runs via `npx` after install — no global installation needed.
 
 **Does it support SSL?** Yes, auto-detected or via `PGSSLMODE`.
 
@@ -555,8 +611,8 @@ src/
 - Authentication plugins (API key, JWT)
 - Streaming query results · Schema migration tools
 - Prometheus metrics / OpenTelemetry
-- Multi-database support (read replicas, shards)
-- Query explain and optimization suggestions
+- SSE transport for remote/shared server deployments
+- Index tuning recommendations (workload analysis + hypothetical index simulation)
 
 ---
 
