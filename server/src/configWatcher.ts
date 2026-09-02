@@ -9,6 +9,7 @@ const CONFIG_FILE_NAMES = ["pgautopilot.json", "pgautopilot.config.json"];
 const DEBOUNCE_MS = 500;
 
 export interface ConfigWatcherOptions {
+  globalReadonly?: boolean;
   onReload?: (config: MultiDbConfig) => void;
   onError?: (error: Error) => void;
 }
@@ -36,7 +37,7 @@ export function watchConfig(
 
   function reload() {
     try {
-      const newConfig = loadMultiDbConfig();
+      const newConfig = loadMultiDbConfig(options.globalReadonly);
       if (!newConfig) {
         log.warn("Config file removed; keeping current connections.");
         return;

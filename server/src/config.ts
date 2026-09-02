@@ -319,7 +319,7 @@ function findConfigFile(): string | null {
   return null;
 }
 
-function parseMultiDbJson(raw: string, filePath: string): MultiDbConfig {
+function parseMultiDbJson(raw: string, filePath: string, globalReadonly?: boolean): MultiDbConfig {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -410,7 +410,7 @@ function parseMultiDbJson(raw: string, filePath: string): MultiDbConfig {
 
   const defaultsRaw = obj.defaults;
   const defaults: MultiDbDefaults = {
-    readonly: true,
+    readonly: globalReadonly ?? true,
     schemas: ["public"],
     statement_timeout_ms: 10000,
     pool_max: 5,
@@ -427,13 +427,13 @@ function parseMultiDbJson(raw: string, filePath: string): MultiDbConfig {
   return { databases: entries, defaults };
 }
 
-export function loadMultiDbConfig(): MultiDbConfig | null {
+export function loadMultiDbConfig(globalReadonly?: boolean): MultiDbConfig | null {
   const filePath = findConfigFile();
   if (!filePath) return null;
 
   try {
     const raw = readFileSync(filePath, "utf-8");
-    const resolved = resolveEnvVarsDeep(parseMultiDbJson(raw, filePath)) as MultiDbConfig;
+    const resolved = resolveEnvVarsDeep(parseMultiDbJson(raw, filePath, globalReadonly)) as MultiDbConfig;
     log.warn(`Loaded multi-database config from ${filePath}.`);
     return resolved;
   } catch (err) {
@@ -462,7 +462,7 @@ export function detectConfigMode(argv: string[]): {
     (modeArg?.split("=")[1] as "development" | "production" | undefined) ??
     (process.env.NODE_ENV === "production" ? "production" : "development");
 
-  const multiDbConfig = loadMultiDbConfig();
+  const multiDbConfig = loadMultiDbConfig(readonly);
 
   if (multiDbConfig && Object.keys(multiDbConfig.databases).length > 0) {
     if (databaseUrl && !multiDbConfig.databases["default"]) {

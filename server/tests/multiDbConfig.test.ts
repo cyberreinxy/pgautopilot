@@ -226,4 +226,73 @@ describe("loadMultiDbConfig", () => {
     expect(db1.statement_timeout_ms).toBe(5000);
     expect(db1.pool_max).toBe(10);
   });
+
+  // --- globalReadonly propagation (bug fix: ALLOW_WRITES ignored in multi-db) ---
+
+  it("globalReadonly=false makes all databases writable when no JSON override", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1" },
+        db2: { url: "postgresql://localhost/db2" },
+      },
+    });
+    const config = loadMultiDbConfig(false); // globalReadonly=false (ALLOW_WRITES=true)
+    expect(config!.defaults.readonly).toBe(false);
+  });
+
+  it("globalReadonly=true keeps databases readonly when no JSON override", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1" },
+      },
+    });
+    const config = loadMultiDbConfig(true); // globalReadonly=true (--readonly or no ALLOW_WRITES)
+    expect(config!.defaults.readonly).toBe(true);
+  });
+
+  it("JSON defaults.readonly wins over globalReadonly", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1" },
+      },
+      defaults: { readonly: true },
+    });
+    const config = loadMultiDbConfig(false); // globalReadonly=false but JSON says readonly:true
+    expect(config!.defaults.readonly).toBe(true); // JSON wins
+  });
+
+  it("JSON defaults.readonly=false wins over globalReadonly=true", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1" },
+      },
+      defaults: { readonly: false },
+    });
+    const config = loadMultiDbConfig(true); // globalReadonly=true but JSON says readonly:false
+    expect(config!.defaults.readonly).toBe(false); // JSON wins
+  });
+
+  it("per-database readonly wins over globalReadonly and defaults", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1", readonly: true },
+        db2: { url: "postgresql://localhost/db2", readonly: false },
+      },
+      defaults: { readonly: false },
+    });
+    const config = loadMultiDbConfig(true); // globalReadonly=true
+    // defaults.readonly=false from JSON, but per-DB overrides take precedence
+    expect(config!.databases.db1!.readonly).toBe(true);  // per-DB wins
+    expect(config!.databases.db2!.readonly).toBe(false); // per-DB wins
+  });
+
+  it("falls back to hardcoded true when no globalReadonly and no JSON override", () => {
+    writeConfig({
+      databases: {
+        db1: { url: "postgresql://localhost/db1" },
+      },
+    });
+    const config = loadMultiDbConfig(); // no globalReadonly param
+    expect(config!.defaults.readonly).toBe(true); // hardcoded default
+  });
 });

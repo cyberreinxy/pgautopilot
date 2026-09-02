@@ -179,6 +179,58 @@ async function main() {
     });
     registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, config.disabledTools);
 
+    // --- MCP Resources ---
+    server.resource("status", "pgautopilot://status", async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "application/json",
+          text: JSON.stringify({
+            name: "pgautopilot",
+            version: "2.3.0",
+            mode: safety.mode,
+            readonly: safety.readonly,
+            database: connectionSummary(config.poolConfig),
+          }, null, 2),
+        },
+      ],
+    }));
+
+    server.resource("schema", "pgautopilot://schema", async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/plain",
+          text: "Use db_schema tool to get the full schema. This resource provides a quick summary.",
+        },
+      ],
+    }));
+
+    // --- MCP Prompts ---
+    server.prompt("explore-database", "Systematically explore an unfamiliar database to understand its structure", async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `You are exploring an unfamiliar PostgreSQL database. Follow these steps:\n\n1. Call db_overview to see all tables, row counts, and relationships.\n2. Call db_schema to understand column types, constraints, and indexes.\n3. Identify the main entities and how they relate.\n4. Note any tables with unusual patterns (large tables, many columns, JSONB fields).\n5. Summarize: what is this database about? What are the key tables? What are the relationships?\n\nStart by calling db_overview.`,
+          },
+        },
+      ],
+    }));
+
+    server.prompt("diagnose-query", "Diagnose why a query is slow or returning unexpected results", async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `You are diagnosing a PostgreSQL query issue. Follow these steps:\n\n1. Ask the user for the query (or find it in context).\n2. Call db_explain with the query to analyze the execution plan.\n3. Look for: sequential scans on large tables, low selectivity filters, missing indexes, high-cost joins, external sorts.\n4. If the query references specific tables, call db_table_info to check available indexes.\n5. Suggest specific fixes: indexes to add, query rewrites, or configuration changes.\n\nStart by asking for the query, or run db_explain if you already have it.`,
+          },
+        },
+      ],
+    }));
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
     log.info("PGAutoPilot v2.3.0 ready");
@@ -339,6 +391,79 @@ async function main() {
 
   registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, resolved.disabledTools);
 
+  // --- MCP Resources ---
+  server.resource("status", "pgautopilot://status", async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify({
+          name: "pgautopilot",
+          version: "2.3.0",
+          mode: "multi-database",
+          defaultDatabase: manager.getDefaultName(),
+          databases: manager.list().map((d) => ({
+            name: d.name,
+            status: d.status,
+            readonly: d.readonly,
+          })),
+          uptimeSeconds: Math.floor((Date.now() - Date.now()) / 1000),
+        }, null, 2),
+      },
+    ],
+  }));
+
+  server.resource("schema", "pgautopilot://schema", async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: "Use db_schema tool to get the full schema. This resource provides a quick summary.",
+      },
+    ],
+  }));
+
+  // --- MCP Prompts ---
+  server.prompt("explore-database", "Systematically explore an unfamiliar database to understand its structure", async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are exploring an unfamiliar PostgreSQL database. Follow these steps:
+
+1. Call db_overview to see all tables, row counts, and relationships.
+2. Call db_schema to understand column types, constraints, and indexes.
+3. Identify the main entities and how they relate.
+4. Note any tables with unusual patterns (large tables, many columns, JSONB fields).
+5. Summarize: what is this database about? What are the key tables? What are the relationships?
+
+Start by calling db_overview.`,
+        },
+      },
+    ],
+  }));
+
+  server.prompt("diagnose-query", "Diagnose why a query is slow or returning unexpected results", async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are diagnosing a PostgreSQL query issue. Follow these steps:
+
+1. Ask the user for the query (or find it in context).
+2. Call db_explain with the query to analyze the execution plan.
+3. Look for: sequential scans on large tables, low selectivity filters, missing indexes, high-cost joins, external sorts.
+4. If the query references specific tables, call db_table_info to check available indexes.
+5. Suggest specific fixes: indexes to add, query rewrites, or configuration changes.
+
+Start by asking for the query, or run db_explain if you already have it.`,
+        },
+      },
+    ],
+  }));
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
@@ -350,7 +475,7 @@ async function main() {
   }
 
   // Watch config file for changes
-  const configWatcher = watchConfig(manager);
+  const configWatcher = watchConfig(manager, { globalReadonly: resolved.globalReadonly });
 
   const shutdown = async () => {
     configWatcher.stop();
