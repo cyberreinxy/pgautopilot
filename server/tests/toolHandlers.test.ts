@@ -520,6 +520,7 @@ describe("db_health extended checks", () => {
         replication: { status: string };
         indexes: { status: string };
         sequences: { status: string };
+        constraints: { status: string };
       };
     };
 
@@ -528,6 +529,7 @@ describe("db_health extended checks", () => {
     expect(payload.healthChecks.replication.status).toBe("no_replicas");
     expect(payload.healthChecks.indexes.status).toBe("ok");
     expect(payload.healthChecks.sequences.status).toBe("ok");
+    expect(payload.healthChecks.constraints.status).toBe("ok");
   });
 
   it("reports tables at risk of TXID wraparound", async () => {
@@ -751,5 +753,200 @@ describe("db_health extended checks", () => {
     expect(payload.status).toBe("connected");
     // healthChecks should still be present (with ok/null values from failed queries)
     expect(payload.healthChecks).toBeDefined();
+  });
+
+  it("warns on low buffer cache hit rate", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_database")) {
+          return {
+            rows: [{
+              datname: "testdb",
+              blks_hit: 1000,
+              blks_read: 9000,
+              hit_rate_pct: 10.0,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("pg_constraint")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        bufferCache: {
+          warning: string;
+          hitRatePct: number;
+          blksHit: number;
+          blksRead: number;
+        };
+      };
+    };
+
+    expect(payload.healthChecks.bufferCache.warning).toContain("10%");
+    expect(payload.healthChecks.bufferCache.warning).toContain("below 90%");
+    expect(payload.healthChecks.bufferCache.hitRatePct).toBe(10.0);
+    expect(payload.healthChecks.bufferCache.blksHit).toBe(1000);
+    expect(payload.healthChecks.bufferCache.blksRead).toBe(9000);
+  });
+
+  it("reports buffer cache as OK when hit rate is high", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_database")) {
+          return {
+            rows: [{
+              datname: "testdb",
+              blks_hit: 99000,
+              blks_read: 1000,
+              hit_rate_pct: 99.0,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("pg_constraint")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        bufferCache: {
+          status: string;
+          hitRatePct: number;
+        };
+      };
+    };
+
+    expect(payload.healthChecks.bufferCache.status).toBe("ok");
+    expect(payload.healthChecks.bufferCache.hitRatePct).toBe(99.0);
+  });
+
+  it("omits buffer cache when query returns empty", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_database")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_constraint")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: Record<string, unknown>;
+    };
+
+    // bufferCache should not exist when query returns no rows
+    expect(payload.healthChecks.bufferCache).toBeUndefined();
+  });
+
+  it("reports invalid constraints", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_database")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_constraint") && sql.includes("NOT convalidated")) {
+          return {
+            rows: [
+              { conname: "fk_orders_user", table_name: "orders", contype: "f", is_invalid: true },
+              { conname: "chk_positive_amount", table_name: "payments", contype: "c", is_invalid: true },
+            ],
+            rowCount: 2,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        constraints: {
+          warning: string;
+          invalid: { conname: string; table_name: string }[];
+        };
+      };
+    };
+
+    expect(payload.healthChecks.constraints.warning).toContain("2 invalid constraint");
+    expect(payload.healthChecks.constraints.invalid).toHaveLength(2);
+    expect(payload.healthChecks.constraints.invalid[0]!.conname).toBe("fk_orders_user");
+  });
+
+  it("reports constraints as OK when none are invalid", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_database")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_constraint")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        constraints: { status: string };
+      };
+    };
+
+    expect(payload.healthChecks.constraints.status).toBe("ok");
   });
 });
