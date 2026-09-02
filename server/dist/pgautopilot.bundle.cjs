@@ -46612,7 +46612,7 @@ function findConfigFile() {
   }
   return null;
 }
-function parseMultiDbJson(raw, filePath) {
+function parseMultiDbJson(raw, filePath, globalReadonly) {
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -46690,7 +46690,7 @@ function parseMultiDbJson(raw, filePath) {
   }
   const defaultsRaw = obj.defaults;
   const defaults2 = {
-    readonly: true,
+    readonly: globalReadonly ?? true,
     schemas: ["public"],
     statement_timeout_ms: 1e4,
     pool_max: 5
@@ -46708,13 +46708,13 @@ function parseMultiDbJson(raw, filePath) {
   }
   return { databases: entries, defaults: defaults2 };
 }
-function loadMultiDbConfig() {
+function loadMultiDbConfig(globalReadonly) {
   const filePath = findConfigFile();
   if (!filePath)
     return null;
   try {
     const raw = (0, import_fs.readFileSync)(filePath, "utf-8");
-    const resolved = resolveEnvVarsDeep(parseMultiDbJson(raw, filePath));
+    const resolved = resolveEnvVarsDeep(parseMultiDbJson(raw, filePath, globalReadonly));
     log.warn(`Loaded multi-database config from ${filePath}.`);
     return resolved;
   } catch (err) {
@@ -46735,7 +46735,7 @@ function detectConfigMode(argv) {
   const readonly2 = resolveReadonly(argv, process.env.ALLOW_WRITES);
   const modeArg = argv.find((a) => a.startsWith("--mode="));
   const mode = modeArg?.split("=")[1] ?? (process.env.NODE_ENV === "production" ? "production" : "development");
-  const multiDbConfig = loadMultiDbConfig();
+  const multiDbConfig = loadMultiDbConfig(readonly2);
   if (multiDbConfig && Object.keys(multiDbConfig.databases).length > 0) {
     if (databaseUrl && !multiDbConfig.databases["default"]) {
       log.info(`DATABASE_URL from .env will serve as the "default" database alongside ${Object.keys(multiDbConfig.databases).length} database(s) in config file.`);
@@ -47013,13 +47013,13 @@ var CreateArgs = TableArg.extend({
 });
 var UpsertArgs = TableArg.extend({
   where: external_exports.string().describe("JSON filter identifying the row, must match a unique constraint"),
-  create: external_exports.string().describe("JSON object of column values to insert if not found"),
-  update: external_exports.string().optional().describe("JSON object of column values to set if found"),
+  create: external_exports.string().describe("JSON object of column-value pairs to insert if not found"),
+  update: external_exports.string().optional().describe("JSON object of column-value pairs to set if found"),
   dryRun: external_exports.boolean().optional().default(false).describe("If true, simulates without writing")
 });
 var UpdateArgs = TableArg.extend({
   where: external_exports.string().describe("JSON filter selecting rows to update"),
-  data: external_exports.string().describe("JSON object of column values to set"),
+  data: external_exports.string().describe("JSON object of column-value pairs to set"),
   dryRun: external_exports.boolean().optional().default(false).describe("If true, simulates without writing"),
   confirmAll: external_exports.boolean().optional().default(false).describe("Required to update all rows when where is '{}'")
 });
@@ -47031,6 +47031,11 @@ var DeleteArgs = TableArg.extend({
 var ListDatabasesArgs = external_exports.object({});
 var UseDatabaseArgs = external_exports.object({
   database: external_exports.string().describe("Name of the database to switch to as the default")
+});
+var ExplainArgs = DatabaseArg.extend({
+  query: external_exports.string().describe("The SQL SELECT query to analyze. Must be a SELECT statement. The query is wrapped in EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) automatically."),
+  analyze: external_exports.boolean().optional().default(true).describe("Run EXPLAIN ANALYZE for actual timing (default: true)."),
+  buffers: external_exports.boolean().optional().default(true).describe("Include buffer usage statistics (default: true).")
 });
 var readOnly = {
   readOnlyHint: true,
@@ -47047,19 +47052,44 @@ var write2 = {
 var toolDefinitions = {
   mcp_status: {
     title: "MCP Server Status",
-    description: "Reports whether the MCP server is ready to run database tools and the database it is connected to. If the server could not be configured (e.g. DATABASE_URL is missing or conflicting), this tool explains exactly what to fix.",
+    description: `Reports whether the MCP server is ready to run database tools and which database it is connected to. Use this tool first if you suspect a configuration problem. When the server is not configured (e.g. DATABASE_URL is missing or invalid), this tool returns a detailed explanation of exactly what to fix, including the expected .env file location and connection string format. In multi-database mode, it lists every configured database with its connection status. This tool never modifies anything \u2014 it is purely informational.
+
+When to use:
+- At the start of a session to verify the server is connected and healthy.
+- When any other tool returns a connection error, to diagnose the root cause.
+- When the user asks about the current server configuration or connected database.
+
+Returns: a JSON object with 'status' (ready|not_configured), 'database' (connection summary), 'mode' (read-only or read-write), and 'readonly' flag. Errors include actionable guidance.`,
     inputSchema: {},
     annotations: readOnly
   },
   db_list_databases: {
     title: "List Databases",
-    description: "List all configured databases with their connection status, host, and read-only setting. Call this first in multi-database mode to see available database names.",
+    description: `Lists all databases configured in pgautopilot.json for multi-database mode, including each database's connection status (connected, not connected, or error), host, port, schema, and read-only setting. This tool is only meaningful in multi-database mode \u2014 in single-database mode it returns a message indicating only one database is configured.
+
+When to use:
+- As the first call when the user wants to work with a specific named database.
+- To discover which databases are available before calling db_use_database.
+- To verify that all configured databases are reachable.
+
+Returns: an array of database entries with name, connection summary, status (connected | not connected | error), and readonly flag. Databases that failed to connect at startup will show 'not connected' and will be lazily connected on first use.`,
     inputSchema: ListDatabasesArgs,
     annotations: readOnly
   },
   db_use_database: {
     title: "Switch Default Database",
-    description: "Switch the default database for subsequent queries. After switching, all tools without an explicit database parameter will use this database.",
+    description: `Switches the default database for subsequent tool calls. After switching, all tools that accept an optional 'database' parameter will use this database when the parameter is omitted. The target database must be listed in pgautopilot.json. This is an idempotent operation \u2014 calling it with the same database name has no effect.
+
+When to use:
+- After calling db_list_databases, when the user wants to work with a specific database.
+- When switching between production and analytics databases mid-session.
+
+Behavioral notes:
+- The target database is lazily connected on first use if not already connected.
+- If the target database is unreachable, the switch succeeds but subsequent tools will return a connection error with guidance.
+- This does NOT affect other MCP sessions or connections \u2014 only the current session.
+
+Returns: confirmation with the new default database name and its connection details.`,
     inputSchema: UseDatabaseArgs,
     annotations: {
       readOnlyHint: true,
@@ -47070,61 +47100,241 @@ var toolDefinitions = {
   },
   db_overview: {
     title: "Database Overview",
-    description: "Overview of the connected database: tables with approximate row counts, foreign key relationships, server mode, and safety rules. Call this first when exploring a database.",
+    description: `Provides a high-level overview of the connected PostgreSQL database: all tables with approximate row counts, foreign key relationships between tables, the server mode (read-only or read-write), and active safety rules (blocked tables, high-risk tables, sensitive columns). Use this as your first call when exploring an unfamiliar database to understand its structure before querying specific tables.
+
+When to use:
+- At the start of a session to understand what tables exist and how they relate.
+- When the user asks "What's in this database?" or "Show me the tables."
+- Before writing queries, to confirm table names and relationships.
+
+Behavioral notes:
+- Row counts are estimates from pg_stat (not exact COUNT(*)) for performance.
+- Only tables in the configured schemas are shown (default: public).
+- The overview includes safety metadata so the agent knows what operations are allowed.
+
+Returns: JSON with tables array (name, estimated rows, column count), foreign keys, server mode, and safety configuration.`,
     inputSchema: DatabaseArg,
     annotations: readOnly
   },
   db_schema: {
     title: "Database Schema",
-    description: "Full schema with column-level detail and a relationship diagram, introspected live from the connected PostgreSQL database.",
+    description: `Returns the full database schema with column-level detail: every table's columns with their data types, nullability, defaults, constraints (primary key, unique, check), indexes, and foreign key relationships presented as a relationship diagram. This is introspected live from PostgreSQL's information_schema, so it always reflects the current state of the database.
+
+When to use:
+- When you need column-level detail beyond what db_overview provides.
+- Before constructing queries with specific columns, to verify column names and types.
+- When the user asks about table structure, constraints, or relationships.
+- When debugging query errors related to column types or constraints.
+
+Behavioral notes:
+- Schema is fetched fresh on every call (not cached) to catch DDL changes.
+- Only schemas listed in PG_SCHEMAS are included (default: public).
+- The relationship diagram shows foreign keys between tables, useful for JOIN queries.
+
+Returns: JSON with tables (each containing columns with type, nullable, default, constraints), indexes, and a relationships array.`,
     inputSchema: DatabaseArg,
     annotations: readOnly
   },
   db_health: {
     title: "Database Health",
-    description: "Check database connectivity, pool stats, uptime, and request count. In multi-database mode, omit the database parameter to see stats for all databases.",
+    description: `Checks database connectivity, connection pool statistics, server uptime, and total request count. In multi-database mode, omit the database parameter to see health status for all configured databases simultaneously. Also runs PostgreSQL system checks: vacuum health (TXID wraparound risk), replication lag, index usage, and sequence exhaustion.
+
+When to use:
+- At the start of a session to verify the database is responsive.
+- When the user asks about connection health or pool utilization.
+- When troubleshooting slow responses or connection errors.
+- Periodically during long sessions to check pool exhaustion.
+- To check vacuum/replication/sequence health in production.
+
+Behavioral notes:
+- In single-database mode, returns stats for the one connected database.
+- In multi-database mode, returns an array of health entries for all databases.
+- 'idle' connections are available; 'active' connections are in use.
+- If pool utilization is high (>80%), consider increasing PGPOOL_MAX.
+- Vacuum checks query pg_stat_user_tables \u2014 no extensions required.
+- Replication checks query pg_stat_replication \u2014 returns empty on standalone instances.
+
+Returns: JSON with connected (boolean), pool stats (total, idle, active), uptime seconds, total requests served, database connection summary, and health checks (vacuum, replication, indexes, sequences).`,
     inputSchema: HealthArgs,
     annotations: readOnly
   },
   db_table_info: {
     title: "Table Information",
-    description: "Detailed info for one table: exact row count, columns, indexes, foreign keys, size.",
+    description: `Returns detailed information about a single table: exact row count (via COUNT(*)), all columns with their types and nullability, all indexes with their columns and uniqueness, foreign key relationships, and approximate table size on disk. Use this when you need specifics about one table that go beyond the overview.
+
+When to use:
+- After db_overview, to drill into a specific table's details.
+- When the user asks "Tell me about the orders table" or "What indexes does users have?"
+- Before writing performance-sensitive queries, to understand available indexes.
+- When debugging issues related to a specific table.
+
+Behavioral notes:
+- Row count is exact (uses COUNT(*)), which may be slow on very large tables.
+- The table name must exist in the database \u2014 a typo returns a clear error with suggestions from the schema.
+- Table size is approximate, based on pg_table_size().
+
+Returns: JSON with row_count, columns array, indexes array, foreign_keys, and size_bytes.`,
     inputSchema: TableInfoArgs,
     annotations: readOnly
   },
   db_find_many: {
     title: "Find Many Rows",
-    description: "Query rows from any table. Supports where, select, orderBy, take, skip. Returns pagination metadata.",
+    description: `Queries rows from a table with flexible filtering, column selection, sorting, and pagination. This is the primary tool for reading data. All parameters are optional except 'table' \u2014 omitting filters returns all rows (up to the limit). The default limit is 50 rows; the maximum is 500. Sensitive columns (passwords, tokens, keys) are automatically redacted in the output.
+
+When to use:
+- "Show me recent orders", "Find users with email containing gmail"
+- "List products sorted by price", "Get page 2 of customers"
+- Any read query that needs filtering, sorting, or pagination
+
+Parameter guidance:
+- where: JSON filter object. Supports operators: eq, neq, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn. Example: {"status": "active", "age": {"gt": 18}}
+- select: JSON array of column names to return. Example: ["id", "name", "email"]
+- orderBy: JSON object with column name and direction. Example: {"created_at": "desc"}
+- take: max rows to return (default 50, max 500)
+- skip: rows to skip for offset pagination
+
+Behavioral notes:
+- All queries run in a read-only transaction with a configurable timeout (default 10s).
+- The table name is validated against the live schema before query execution.
+- Results include pagination metadata (total count when available).
+- On error, returns a clear message explaining what went wrong.`,
     inputSchema: FindManyArgs,
     annotations: readOnly
   },
   db_find_first: {
     title: "Find First Row",
-    description: "Find a single row matching a filter. Returns null if not found.",
+    description: `Finds a single row matching the given filter. Returns the first matching row or null if no rows match. Use this instead of db_find_many when you expect exactly one result and want a single object rather than an array. Sensitive columns are automatically redacted.
+
+When to use:
+- "Get user with ID 42", "Find the order with this tracking number"
+- Lookups by unique identifier (primary key or unique constraint)
+- When you need exactly one row, not a list
+
+Parameter guidance:
+- where: JSON filter object (required). Must be specific enough to target one row. Example: {"id": 42} or {"email": "user@example.com"}
+- select: optional JSON array of column names to return
+
+Behavioral notes:
+- Returns a single JSON object, not an array.
+- Returns null (not an error) when no row matches the filter.
+- For queries that should return multiple rows, use db_find_many instead.`,
     inputSchema: FindFirstArgs,
     annotations: readOnly
   },
   db_count: {
     title: "Count Rows",
-    description: "Exact count of rows in a table, optionally filtered.",
+    description: `Returns the exact number of rows in a table, optionally filtered. This runs an exact COUNT(*) query \u2014 not an estimate. Use this when you need a precise count for reporting, validation, or before performing bulk operations.
+
+When to use:
+- "How many users signed up this week?"
+- "Count all orders with status pending"
+- Before bulk deletes, to confirm the scope of the operation
+
+Parameter guidance:
+- table: the table name (required)
+- where: optional JSON filter object (same syntax as db_find_many)
+
+Behavioral notes:
+- Exact COUNT(*) on large tables (millions of rows) may be slow.
+- On large tables, consider using db_aggregate with a group-by for approximate breakdowns.
+- Returns an integer count, not a row object.`,
     inputSchema: CountArgs,
     annotations: readOnly
   },
   db_aggregate: {
     title: "Aggregate / Group By",
-    description: "Group rows by one or more columns and compute count, sum, avg, min, max.",
+    description: `Groups rows by one or more columns and computes aggregate functions (count, sum, avg, min, max) on each group. This is the tool for analytical queries like "total sales by category", "average order value by month", or "count of users per country". Results are sorted by the aggregate by default.
+
+When to use:
+- "How many products in each category?" (by=category, _count="*")
+- "Total revenue by region" (by=region, _sum="amount")
+- "Average order value by status" (by=status, _avg="total")
+- "Min and max prices per category" (by=category, _min="price", _max="price")
+
+Parameter guidance:
+- by: comma-separated column names to group by (required). Example: "category, region"
+- where: optional JSON filter applied before grouping
+- orderBy: JSON object for sorting results. Use "_count", "_sum", "_avg", "_min", "_max" as the key. Example: {"_count": "desc"}
+- sum/avg/min/max: comma-separated numeric columns to aggregate
+- take: max groups to return (default 50)
+
+Behavioral notes:
+- All aggregations run in a read-only transaction with a configurable timeout.
+- Results are returned as an array of group objects with the computed aggregates.
+- Groups with zero rows are excluded from the results.`,
     inputSchema: AggregateArgs,
+    annotations: readOnly
+  },
+  db_explain: {
+    title: "Explain Query Plan",
+    description: `Runs EXPLAIN ANALYZE on a SQL SELECT query to analyze its execution plan, performance characteristics, and bottlenecks. Returns the full execution plan with timing, buffer usage, row estimates, and actionable analysis. This tool helps you understand how PostgreSQL processes a query and identifies optimization opportunities like missing indexes, sequential scans, or high-cost operations.
+
+When to use:
+- "Why is this query slow?"
+- "Help me optimize this query"
+- "What indexes would improve this query?"
+- Before creating indexes, to understand current plan
+
+Parameter guidance:
+- query: the SQL SELECT query to analyze (required). Example: "SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON o.user_id = u.id WHERE o.created_at > '2025-01-01' GROUP BY u.name ORDER BY COUNT(o.id) DESC LIMIT 10"
+- analyze: set to true for actual timing (default: true)
+- buffers: set to true to include buffer usage stats (default: true)
+
+Behavioral notes:
+- Only SELECT queries are accepted \u2014 EXPLAIN on writes is not supported.
+- The query is NOT executed \u2014 only the plan is analyzed.
+- Results include: execution plan (JSON), total cost, actual time, rows, buffers, and analysis text.
+- Analysis highlights: sequential scans on large tables, low selectivity filters, missing index opportunities, high-cost joins.
+- No extensions required \u2014 uses built-in PostgreSQL EXPLAIN.`,
+    inputSchema: ExplainArgs,
     annotations: readOnly
   },
   db_raw_query: {
     title: "Raw SQL Query",
-    description: "Execute a raw read-only SELECT with a mandatory LIMIT. Runs inside a read-only, 10-second-timeout transaction.",
+    description: `Executes a raw SQL SELECT statement with a mandatory LIMIT clause. This is the escape hatch for queries that cannot be expressed with the structured tools (complex JOINs, CTEs, window functions, subqueries, etc.). All queries run inside a read-only, single-statement transaction with a configurable timeout (default 10 seconds).
+
+When to use:
+- Complex JOINs across multiple tables
+- CTEs, window functions, or subqueries
+- Custom aggregations not supported by db_aggregate
+- Exploratory queries during development
+
+Parameter guidance:
+- sql: the raw SQL statement (required). Must be a SELECT and MUST include a LIMIT clause. Example: "SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON o.user_id = u.id GROUP BY u.name ORDER BY COUNT(o.id) DESC LIMIT 10"
+- confirmed: set to true to acknowledge the raw query (currently informational)
+
+Behavioral notes:
+- ONLY SELECT statements are allowed. INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, GRANT, and other DDL/DML are rejected.
+- The LIMIT clause is mandatory \u2014 queries without LIMIT are rejected.
+- Only single-statement queries are allowed (no semicolons separating multiple statements).
+- Dangerous functions (pg_read_file, COPY, pg_sleep, etc.) are blocked.
+- Results are capped at 5000 rows to prevent memory exhaustion.
+- Sensitive columns are automatically redacted in the output.
+- For write operations, use the structured tools (db_create, db_update_many, etc.).`,
     inputSchema: RawQueryArgs,
     annotations: readOnly
   },
   db_backup: {
     title: "Backup Database",
-    description: "Full SQL dump via pg_dump, saved to the configured backup directory. Falls back to 'docker exec' when DOCKER_CONTAINER is set and local pg_dump is unavailable.",
+    description: `Creates a full SQL dump of the database using pg_dump and saves it to the configured backup directory (default: ./backups). The backup includes the full schema and data. When the local pg_dump binary is not available and DOCKER_CONTAINER is set, this tool falls back to running pg_dump inside the specified Docker container.
+
+When to use:
+- Before running risky migrations or bulk operations
+- Periodic backups as part of maintenance routines
+- When the user asks to back up or export the database
+
+Parameter guidance:
+- label: optional label for the backup filename (e.g., "pre-migration"). The final filename includes a timestamp: backups/db_backup_pre-migration_2026-09-01T120000.sql
+- confirmed: set to true to confirm the backup operation
+
+Behavioral notes:
+- Requires pg_dump to be available either locally or via Docker.
+- The backup file is a plain SQL dump, not a binary format.
+- Large databases may take significant time and disk space.
+- This tool is idempotent \u2014 running it multiple times creates separate backup files.
+- The backup directory is created automatically if it does not exist.
+
+Returns: path to the created backup file and its size.`,
     inputSchema: BackupArgs,
     annotations: {
       readOnlyHint: true,
@@ -47135,25 +47345,95 @@ var toolDefinitions = {
   },
   db_create: {
     title: "Create Row",
-    description: "Insert a new row. Sensitive columns (passwords, tokens) are stripped automatically.",
+    description: `Inserts a new row into the specified table. All columns are validated against the live schema before execution \u2014 typos in column names or type mismatches are caught early. Sensitive columns (passwords, tokens, API keys, etc.) are automatically stripped from the input to prevent accidental credential storage. Use dry_run=true to preview the insert without actually writing to the database.
+
+When to use:
+- "Add a new user named Jane with email jane@example.com"
+- "Create an order for customer 42 with total $99.99"
+- Any single-row INSERT operation
+
+Parameter guidance:
+- table: the target table name (required)
+- data: JSON object of column-value pairs to insert (required). Example: {"name": "Jane Doe", "email": "jane@example.com", "role": "admin"}
+- dry_run: set to true to validate without writing (default: false)
+
+Behavioral notes:
+- The table name and all column names are validated against the live schema.
+- The INSERT runs in a transaction \u2014 if any constraint is violated, the entire operation rolls back with a clear error message.
+- On success, returns the inserted row including any auto-generated values (e.g., id).
+- Sensitive columns in the input are silently stripped before execution.
+- For multiple inserts, call this tool once per row or use db_raw_query with an INSERT ... VALUES statement (requires confirmed=true and ALLOW_RAW_WRITES).`,
     inputSchema: CreateArgs,
     annotations: write2
   },
   db_upsert: {
     title: "Upsert Row",
-    description: "Insert or update a row using ON CONFLICT. The where filter's columns must match a unique constraint or primary key on the table.",
+    description: `Inserts a new row or updates an existing one using PostgreSQL's ON CONFLICT mechanism. The 'where' filter's columns must match a unique constraint or primary key on the table \u2014 this is how PostgreSQL determines whether to insert or update. If a matching row exists, only the columns specified in 'update' are changed. If no match exists, a new row is created with the values from 'create'. Use dry_run=true to preview.
+
+When to use:
+- "Create this user if they don't exist, otherwise update their last_login"
+- "Upsert product SKU-123 with price $29.99"
+- Idempotent insert-or-update operations
+
+Parameter guidance:
+- table: the target table name (required)
+- where: JSON filter identifying the conflict target (required). Columns must match a unique constraint or primary key. Example: {"email": "jane@example.com"}
+- create: JSON object of column-value pairs for the INSERT case (required)
+- update: JSON object of column-value pairs for the UPDATE case (optional). If omitted, no update occurs on conflict \u2014 the existing row is returned unchanged.
+- dry_run: set to true to validate without writing (default: false)
+
+Behavioral notes:
+- The where columns MUST match a unique constraint or primary key \u2014 the tool validates this against the schema and returns an error if no matching constraint exists.
+- Returns the final row (either newly inserted or updated).
+- This is idempotent \u2014 calling it multiple times with the same data has the same effect as calling it once.`,
     inputSchema: UpsertArgs,
     annotations: { ...write2, idempotentHint: true }
   },
   db_update_many: {
     title: "Update Rows",
-    description: "Update all rows matching a filter. Empty filter requires confirmAll:true to proceed.",
+    description: `Updates all rows matching the given filter. Every column and value is validated against the live schema before execution. When the filter is empty ('{}'), ALL rows in the table would be updated \u2014 this requires confirmAll=true as a safety gate. A warning is issued when more than 10 rows are affected. Use dry_run=true to preview the update without actually writing.
+
+When to use:
+- "Mark all pending orders as shipped"
+- "Update user 42's email to new@example.com"
+- "Set all products in category X as discontinued"
+
+Parameter guidance:
+- table: the target table name (required)
+- where: JSON filter selecting rows to update (required). Example: {"status": "pending"} Use '{}' with confirmAll=true to update ALL rows (dangerous!).
+- data: JSON object of column-value pairs to set (required). Example: {"status": "shipped", "shipped_at": "2026-09-01"}
+- dry_run: set to true to preview without writing (default: false)
+- confirmAll: REQUIRED when where='{}' to confirm updating all rows
+
+Behavioral notes:
+- A warning is emitted when more than 10 rows would be affected.
+- Empty filter with confirmAll=false returns an error requiring explicit confirmation.
+- The update runs in a transaction \u2014 all rows are updated atomically.
+- Returns the count of affected rows.`,
     inputSchema: UpdateArgs,
     annotations: { ...write2, idempotentHint: true }
   },
   db_delete_many: {
     title: "Delete Rows",
-    description: "Delete all rows matching a filter. Empty filter requires confirmAll:true to proceed.",
+    description: `Deletes all rows matching the given filter. This is a destructive operation \u2014 deleted data cannot be recovered unless a backup exists. When the filter is empty ('{}'), ALL rows in the table would be deleted \u2014 this requires confirmAll=true as a safety gate. A warning is issued when more than 10 rows are affected. Use dry_run=true to preview the deletion scope before committing.
+
+When to use:
+- "Delete all logs older than 2025"
+- "Remove user with email test@test.com"
+- "Purge expired sessions"
+
+Parameter guidance:
+- table: the target table name (required)
+- where: JSON filter selecting rows to delete (required). Example: {"expired": true} Use '{}' with confirmAll=true to delete ALL rows (dangerous!).
+- dry_run: set to true to preview without deleting (default: false). STRONGLY recommended \u2014 always dry-run first to see how many rows would be affected.
+- confirmAll: REQUIRED when where='{}' to confirm deleting all rows
+
+Behavioral notes:
+- A warning is emitted when more than 10 rows would be affected.
+- Empty filter with confirmAll=false returns an error requiring explicit confirmation.
+- The delete runs in a transaction \u2014 all rows are deleted atomically.
+- Returns the count of deleted rows.
+- ALWAYS use dry_run=true first to verify the scope before committing.`,
     inputSchema: DeleteArgs,
     annotations: write2
   }
@@ -47928,6 +48208,75 @@ async function suggestDbNames(pool, err) {
     return null;
   }
 }
+async function runHealthChecks(pool, mode) {
+  const checks = {};
+  async function safeQuery(sql) {
+    try {
+      const result = await pool.query(sql);
+      return result.rows;
+    } catch {
+      return null;
+    }
+  }
+  const vacuumRows = await safeQuery(`SELECT schemaname, relname, n_dead_tup, n_live_tup,
+            last_vacuum, last_autovacuum, last_analyze, last_autoanalyze,
+            age(relfrozenxid) as xid_age
+     FROM pg_stat_user_tables
+     WHERE age(relfrozenxid) > 100000000
+     ORDER BY age(relfrozenxid) DESC
+     LIMIT 10`);
+  if (vacuumRows && vacuumRows.length > 0) {
+    checks.vacuum = {
+      warning: `${vacuumRows.length} table(s) approaching TXID wraparound (>100M transactions since freeze)`,
+      tables: vacuumRows
+    };
+  } else {
+    checks.vacuum = { status: "ok" };
+  }
+  const replRows = await safeQuery(`SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
+            pg_wal_lsn_diff(sent_lsn, replay_lsn) AS replay_lag_bytes
+     FROM pg_stat_replication`);
+  if (replRows && replRows.length > 0) {
+    const lagging = replRows.filter((r) => r.replay_lag_bytes > 1048576);
+    checks.replication = {
+      replicas: replRows.length,
+      lagging: lagging.length,
+      details: replRows
+    };
+  } else {
+    checks.replication = { status: "no_replicas" };
+  }
+  const unusedRows = await safeQuery(`SELECT schemaname, relname, indexrelname, idx_scan
+     FROM pg_stat_user_indexes
+     WHERE idx_scan = 0 AND indexrelname NOT LIKE '%_pkey'
+     ORDER BY pg_relation_size(indexrelid) DESC
+     LIMIT 10`);
+  if (unusedRows && unusedRows.length > 0) {
+    checks.indexes = {
+      warning: `${unusedRows.length} unused index(es) found \u2014 these consume space and slow down writes`,
+      unused: unusedRows
+    };
+  } else {
+    checks.indexes = { status: "ok" };
+  }
+  const seqRows = await safeQuery(`SELECT sequencename, schema_name,
+            last_value, max_value,
+            ROUND(100.0 * last_value / NULLIF(max_value, 0), 2) AS pct_used
+     FROM information_schema.sequences
+     JOIN pg_sequences ON information_schema.sequences.sequence_name = pg_sequences.sequencename
+     WHERE max_value > 0 AND last_value > max_value * 0.8
+     ORDER BY pct_used DESC
+     LIMIT 10`);
+  if (seqRows && seqRows.length > 0) {
+    checks.sequences = {
+      warning: `${seqRows.length} sequence(s) above 80% of max value`,
+      sequences: seqRows
+    };
+  } else {
+    checks.sequences = { status: "ok" };
+  }
+  return checks;
+}
 function textResponse(data) {
   return {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }]
@@ -48099,6 +48448,7 @@ function createHandlers(pool, safety, config2, connectionManager) {
         const latencyMs = Date.now() - t0;
         lastSuccessAt = Date.now();
         const uptime = Math.floor((Date.now() - startTime) / 1e3);
+        const healthChecks = await runHealthChecks(pool, safety.mode);
         logRequest("db_health", latencyMs);
         return textResponse({
           status: "connected",
@@ -48110,7 +48460,8 @@ function createHandlers(pool, safety, config2, connectionManager) {
           lastCheckLatencyMs: latencyMs,
           lastSuccessAt: lastSuccessAt ? new Date(lastSuccessAt).toISOString() : null,
           lastErrorAt: lastErrorAt ? new Date(lastErrorAt).toISOString() : null,
-          lastError
+          lastError,
+          healthChecks
         });
       } catch (err) {
         const latencyMs = Date.now() - t0;
@@ -48257,6 +48608,120 @@ function createHandlers(pool, safety, config2, connectionManager) {
         count: result.rows.length,
         data: redactAggregateRows(result.rows, s, groupCols, aggregates)
       });
+    },
+    db_explain: async (args) => {
+      const t0 = Date.now();
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
+      const sql = args.query.trim().replace(/;\s*$/, "");
+      const normalized = sql.toUpperCase().trim();
+      if (!/^SELECT\b/.test(normalized)) {
+        throw new Error("db_explain only accepts SELECT queries. EXPLAIN on write statements is not supported.");
+      }
+      const options = ["FORMAT JSON"];
+      if (args.analyze)
+        options.push("ANALYZE");
+      if (args.buffers)
+        options.push("BUFFERS");
+      const explainSql = `EXPLAIN (${options.join(", ")}) ${sql}`;
+      const client = await p.connect();
+      try {
+        let walkPlan2 = function(node2, depth) {
+          const nodeType = node2.nodeType ?? "Unknown";
+          const relationName = node2.relationName ?? null;
+          const startupCost = node2.startupCost ?? 0;
+          const totalCostVal = node2.totalCost ?? 0;
+          const planRows = node2.planRows ?? 0;
+          const actualRowsVal = node2.actualRows ?? 0;
+          const sharedHitVal = node2.sharedHitBlocks ?? 0;
+          const sharedReadVal = node2.sharedReadBlocks ?? 0;
+          if (nodeType === "Seq Scan" && relationName) {
+            const filter = node2.filter ?? node2.recheckCond ?? null;
+            const removedRows = node2.rowsRemovedByFilter ?? node2.rowsRemovedByJoinFilter ?? 0;
+            if (removedRows > 1e3 || planRows > 100 && removedRows > planRows * 0.5) {
+              analysis.push(`Sequential scan on "${relationName}" removes ${removedRows.toLocaleString()} rows. Consider an index on the filtered column(s).`);
+            }
+            if (sharedReadVal > 100) {
+              analysis.push(`Sequential scan on "${relationName}" reads ${sharedReadVal} disk blocks. An index could reduce I/O.`);
+            }
+          }
+          if (nodeType === "Hash Join" && totalCostVal > 1e3) {
+            analysis.push(`Hash Join with total cost ${totalCostVal.toFixed(0)}. Ensure join columns are indexed.`);
+          }
+          if (nodeType === "Sort") {
+            const sortMethod = node2.sortMethod ?? null;
+            if (sortMethod && sortMethod.includes("external")) {
+              analysis.push(`External sort detected \u2014 sorting exceeded work_mem. Consider increasing work_mem or adding an index to avoid the sort.`);
+            }
+          }
+          if (totalCostVal > 1e4 && depth > 0) {
+            analysis.push(`High-cost ${nodeType}${relationName ? ` on "${relationName}"` : ""} (cost: ${totalCostVal.toFixed(0)}, rows: ${planRows}).`);
+          }
+          const plans = node2.Plans ?? [];
+          for (const child of plans) {
+            walkPlan2(child, depth + 1);
+          }
+        };
+        var walkPlan = walkPlan2;
+        await client.query("BEGIN");
+        await client.query(`SET LOCAL statement_timeout = ${c.statementTimeoutMs}`);
+        await client.query("SET LOCAL default_transaction_read_only = on");
+        const result = await client.query(explainSql);
+        await client.query("COMMIT");
+        const plan = result.rows[0]?.["QUERY PLAN"];
+        if (!plan || !Array.isArray(plan)) {
+          throw new Error("Failed to parse EXPLAIN output.");
+        }
+        const root = plan[0];
+        const planningTime = root["planningTime"] ?? null;
+        const executionTime = root["executionTime"] ?? null;
+        const totalCost = root["totalCost"] ?? null;
+        const actualRows = root["actualRows"] ?? null;
+        const sharedHit = root["sharedHitBlocks"] ?? null;
+        const sharedRead = root["sharedReadBlocks"] ?? null;
+        const tempRead = root["tempReadBlocks"] ?? null;
+        const tempWritten = root["tempWrittenBlocks"] ?? null;
+        const analysis = [];
+        for (const node2 of plan) {
+          walkPlan2(node2, 0);
+        }
+        if (sharedHit !== null && sharedRead !== null) {
+          const totalBlocks = sharedHit + sharedRead;
+          if (totalBlocks > 0) {
+            const hitRate = (sharedHit / totalBlocks * 100).toFixed(1);
+            if (Number(hitRate) < 90) {
+              analysis.push(`Buffer cache hit rate: ${hitRate}% (${sharedHit} hit, ${sharedRead} read from disk). Below 90% \u2014 consider increasing shared_buffers or checking table bloat.`);
+            }
+          }
+        }
+        if (tempRead && tempRead > 0) {
+          analysis.push(`Query uses temporary files (${tempRead} temp read blocks). Increase work_mem to avoid disk spills.`);
+        }
+        if (analysis.length === 0) {
+          analysis.push("No major issues detected. Query plan looks reasonable.");
+        }
+        logRequest("db_explain", Date.now() - t0);
+        return textResponse({
+          query: sql,
+          plan,
+          summary: {
+            planningTimeMs: planningTime,
+            executionTimeMs: executionTime,
+            totalCost,
+            rows: actualRows,
+            sharedHitBlocks: sharedHit,
+            sharedReadBlocks: sharedRead,
+            tempReadBlocks: tempRead,
+            tempWrittenBlocks: tempWritten
+          },
+          analysis
+        });
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {
+        });
+        throw err;
+      } finally {
+        client.release();
+      }
     },
     db_raw_query: async (args) => {
       const t0 = Date.now();
@@ -48791,7 +49256,7 @@ function watchConfig(manager, options = {}) {
   let fsWatcher = null;
   function reload() {
     try {
-      const newConfig = loadMultiDbConfig();
+      const newConfig = loadMultiDbConfig(options.globalReadonly);
       if (!newConfig) {
         log.warn("Config file removed; keeping current connections.");
         return;
@@ -48996,6 +49461,68 @@ async function main() {
       ]
     });
     registerTools(server, { ...untypedHandlers2, mcp_status: statusHandler2 }, config3.disabledTools);
+    server.resource("status", "pgautopilot://status", async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "application/json",
+          text: JSON.stringify({
+            name: "pgautopilot",
+            version: "2.3.0",
+            mode: safety2.mode,
+            readonly: safety2.readonly,
+            database: connectionSummary(config3.poolConfig)
+          }, null, 2)
+        }
+      ]
+    }));
+    server.resource("schema", "pgautopilot://schema", async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/plain",
+          text: "Use db_schema tool to get the full schema. This resource provides a quick summary."
+        }
+      ]
+    }));
+    server.prompt("explore-database", "Systematically explore an unfamiliar database to understand its structure", async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `You are exploring an unfamiliar PostgreSQL database. Follow these steps:
+
+1. Call db_overview to see all tables, row counts, and relationships.
+2. Call db_schema to understand column types, constraints, and indexes.
+3. Identify the main entities and how they relate.
+4. Note any tables with unusual patterns (large tables, many columns, JSONB fields).
+5. Summarize: what is this database about? What are the key tables? What are the relationships?
+
+Start by calling db_overview.`
+          }
+        }
+      ]
+    }));
+    server.prompt("diagnose-query", "Diagnose why a query is slow or returning unexpected results", async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `You are diagnosing a PostgreSQL query issue. Follow these steps:
+
+1. Ask the user for the query (or find it in context).
+2. Call db_explain with the query to analyze the execution plan.
+3. Look for: sequential scans on large tables, low selectivity filters, missing indexes, high-cost joins, external sorts.
+4. If the query references specific tables, call db_table_info to check available indexes.
+5. Suggest specific fixes: indexes to add, query rewrites, or configuration changes.
+
+Start by asking for the query, or run db_explain if you already have it.`
+          }
+        }
+      ]
+    }));
     const transport2 = new StdioServerTransport();
     await server.connect(transport2);
     log.info("PGAutoPilot v2.3.0 ready");
@@ -49118,6 +49645,73 @@ async function main() {
     ]
   });
   registerTools(server, { ...untypedHandlers, mcp_status: statusHandler }, resolved.disabledTools);
+  server.resource("status", "pgautopilot://status", async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "application/json",
+        text: JSON.stringify({
+          name: "pgautopilot",
+          version: "2.3.0",
+          mode: "multi-database",
+          defaultDatabase: manager.getDefaultName(),
+          databases: manager.list().map((d) => ({
+            name: d.name,
+            status: d.status,
+            readonly: d.readonly
+          })),
+          uptimeSeconds: Math.floor((Date.now() - Date.now()) / 1e3)
+        }, null, 2)
+      }
+    ]
+  }));
+  server.resource("schema", "pgautopilot://schema", async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: "Use db_schema tool to get the full schema. This resource provides a quick summary."
+      }
+    ]
+  }));
+  server.prompt("explore-database", "Systematically explore an unfamiliar database to understand its structure", async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are exploring an unfamiliar PostgreSQL database. Follow these steps:
+
+1. Call db_overview to see all tables, row counts, and relationships.
+2. Call db_schema to understand column types, constraints, and indexes.
+3. Identify the main entities and how they relate.
+4. Note any tables with unusual patterns (large tables, many columns, JSONB fields).
+5. Summarize: what is this database about? What are the key tables? What are the relationships?
+
+Start by calling db_overview.`
+        }
+      }
+    ]
+  }));
+  server.prompt("diagnose-query", "Diagnose why a query is slow or returning unexpected results", async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are diagnosing a PostgreSQL query issue. Follow these steps:
+
+1. Ask the user for the query (or find it in context).
+2. Call db_explain with the query to analyze the execution plan.
+3. Look for: sequential scans on large tables, low selectivity filters, missing indexes, high-cost joins, external sorts.
+4. If the query references specific tables, call db_table_info to check available indexes.
+5. Suggest specific fixes: indexes to add, query rewrites, or configuration changes.
+
+Start by asking for the query, or run db_explain if you already have it.`
+        }
+      }
+    ]
+  }));
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info("Multi-database mode ready");
@@ -49125,7 +49719,7 @@ async function main() {
     const statusIcon = entry.connected ? "connected" : "not connected (lazy)";
     log.info(`  [${entry.name}] ${entry.connection} \u2014 ${statusIcon} | readonly: ${entry.readonly}`);
   }
-  const configWatcher = watchConfig(manager);
+  const configWatcher = watchConfig(manager, { globalReadonly: resolved.globalReadonly });
   const shutdown = async () => {
     configWatcher.stop();
     await server.close();
