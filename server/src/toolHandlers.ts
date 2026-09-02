@@ -27,6 +27,7 @@ import {
   TableInfoArgs,
   HealthArgs,
   UseDatabaseArgs,
+  ExplainArgs,
 } from "./toolDefinitions.js";
 import type { ConnectionManager, DatabaseEntry } from "./connectionManager.js";
 import {
@@ -198,6 +199,94 @@ async function suggestDbNames(pool: Pool, err: unknown): Promise<string | null> 
   } catch {
     return null;
   }
+}
+
+async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string, unknown>> {
+  const checks: Record<string, unknown> = {};
+
+  // Helper: run a query, return rows or null on error
+  async function safeQuery(sql: string): Promise<unknown[] | null> {
+    try {
+      const result = await pool.query(sql);
+      return result.rows as unknown[];
+    } catch {
+      return null;
+    }
+  }
+
+  // 1. Vacuum health — tables at risk of TXID wraparound
+  const vacuumRows = await safeQuery(
+    `SELECT schemaname, relname, n_dead_tup, n_live_tup,
+            last_vacuum, last_autovacuum, last_analyze, last_autoanalyze,
+            age(relfrozenxid) as xid_age
+     FROM pg_stat_user_tables
+     WHERE age(relfrozenxid) > 100000000
+     ORDER BY age(relfrozenxid) DESC
+     LIMIT 10`,
+  );
+  if (vacuumRows && vacuumRows.length > 0) {
+    checks.vacuum = {
+      warning: `${vacuumRows.length} table(s) approaching TXID wraparound (>100M transactions since freeze)`,
+      tables: vacuumRows,
+    };
+  } else {
+    checks.vacuum = { status: "ok" };
+  }
+
+  // 2. Replication health
+  const replRows = await safeQuery(
+    `SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
+            pg_wal_lsn_diff(sent_lsn, replay_lsn) AS replay_lag_bytes
+     FROM pg_stat_replication`);
+  if (replRows && replRows.length > 0) {
+    const lagging = replRows.filter(
+      (r) => ((r as Record<string, unknown>).replay_lag_bytes as number) > 1048576,
+    );
+    checks.replication = {
+      replicas: replRows.length,
+      lagging: lagging.length,
+      details: replRows,
+    };
+  } else {
+    checks.replication = { status: "no_replicas" };
+  }
+
+  // 3. Index health — unused and duplicate indexes
+  const unusedRows = await safeQuery(
+    `SELECT schemaname, relname, indexrelname, idx_scan
+     FROM pg_stat_user_indexes
+     WHERE idx_scan = 0 AND indexrelname NOT LIKE '%_pkey'
+     ORDER BY pg_relation_size(indexrelid) DESC
+     LIMIT 10`);
+  if (unusedRows && unusedRows.length > 0) {
+    checks.indexes = {
+      warning: `${unusedRows.length} unused index(es) found — these consume space and slow down writes`,
+      unused: unusedRows,
+    };
+  } else {
+    checks.indexes = { status: "ok" };
+  }
+
+  // 4. Sequence health — sequences nearing max value
+  const seqRows = await safeQuery(
+    `SELECT sequencename, schema_name,
+            last_value, max_value,
+            ROUND(100.0 * last_value / NULLIF(max_value, 0), 2) AS pct_used
+     FROM information_schema.sequences
+     JOIN pg_sequences ON information_schema.sequences.sequence_name = pg_sequences.sequencename
+     WHERE max_value > 0 AND last_value > max_value * 0.8
+     ORDER BY pct_used DESC
+     LIMIT 10`);
+  if (seqRows && seqRows.length > 0) {
+    checks.sequences = {
+      warning: `${seqRows.length} sequence(s) above 80% of max value`,
+      sequences: seqRows,
+    };
+  } else {
+    checks.sequences = { status: "ok" };
+  }
+
+  return checks;
 }
 
 function textResponse(data: unknown) {
@@ -398,13 +487,17 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         });
       }
 
-      // --- Single-database mode (original behavior) ---
+      // --- Single-database mode (original behavior + health checks) ---
       const t0 = Date.now();
       try {
         await pool.query("SELECT 1");
         const latencyMs = Date.now() - t0;
         lastSuccessAt = Date.now();
         const uptime = Math.floor((Date.now() - startTime) / 1000);
+
+        // Run extended health checks in parallel (best-effort, don't fail the whole check)
+        const healthChecks = await runHealthChecks(pool, safety.mode);
+
         logRequest("db_health", latencyMs);
         return textResponse({
           status: "connected",
@@ -417,6 +510,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
           lastSuccessAt: lastSuccessAt ? new Date(lastSuccessAt).toISOString() : null,
           lastErrorAt: lastErrorAt ? new Date(lastErrorAt).toISOString() : null,
           lastError,
+          healthChecks,
         });
       } catch (err) {
         const latencyMs = Date.now() - t0;
@@ -596,6 +690,169 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         count: result.rows.length,
         data: redactAggregateRows(result.rows, s, groupCols, aggregates),
       });
+    },
+
+    db_explain: async (args: z.infer<typeof ExplainArgs>) => {
+      const t0 = Date.now();
+      const { pool: p, safety: s, config: c } = await resolveDb(args);
+      const sql = args.query.trim().replace(/;\s*$/, "");
+
+      const normalized = sql.toUpperCase().trim();
+      if (!/^SELECT\b/.test(normalized)) {
+        throw new Error(
+          "db_explain only accepts SELECT queries. EXPLAIN on write statements is not supported.",
+        );
+      }
+
+      // Build EXPLAIN options
+      const options: string[] = ["FORMAT JSON"];
+      if (args.analyze) options.push("ANALYZE");
+      if (args.buffers) options.push("BUFFERS");
+
+      const explainSql = `EXPLAIN (${options.join(", ")}) ${sql}`;
+
+      const client = await p.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`SET LOCAL statement_timeout = ${c.statementTimeoutMs}`);
+        await client.query("SET LOCAL default_transaction_read_only = on");
+        const result = await client.query(explainSql);
+        await client.query("COMMIT");
+
+        const plan = result.rows[0]?.["QUERY PLAN"] as unknown[];
+        if (!plan || !Array.isArray(plan)) {
+          throw new Error("Failed to parse EXPLAIN output.");
+        }
+
+        const root = plan[0] as Record<string, unknown>;
+
+        // Extract key metrics
+        const planningTime = (root["planningTime"] as number) ?? null;
+        const executionTime = (root["executionTime"] as number) ?? null;
+        const totalCost = (root["totalCost"] as number) ?? null;
+        const actualRows = (root["actualRows"] as number) ?? null;
+        const sharedHit = (root["sharedHitBlocks"] as number) ?? null;
+        const sharedRead = (root["sharedReadBlocks"] as number) ?? null;
+        const tempRead = (root["tempReadBlocks"] as number) ?? null;
+        const tempWritten = (root["tempWrittenBlocks"] as number) ?? null;
+
+        // Analyze for issues
+        const analysis: string[] = [];
+
+        function walkPlan(node: Record<string, unknown>, depth: number) {
+          const nodeType = node.nodeType as string ?? "Unknown";
+          const relationName = node.relationName as string ?? null;
+          const startupCost = node.startupCost as number ?? 0;
+          const totalCostVal = node.totalCost as number ?? 0;
+          const planRows = node.planRows as number ?? 0;
+          const actualRowsVal = node.actualRows as number ?? 0;
+          const sharedHitVal = node.sharedHitBlocks as number ?? 0;
+          const sharedReadVal = node.sharedReadBlocks as number ?? 0;
+
+          // Detect sequential scans
+          if (nodeType === "Seq Scan" && relationName) {
+            const filter = node.filter as string ?? node.recheckCond as string ?? null;
+            const removedRows = (node.rowsRemovedByFilter as number) ?? (node.rowsRemovedByJoinFilter as number) ?? 0;
+            if (removedRows > 1000 || (planRows > 100 && removedRows > planRows * 0.5)) {
+              analysis.push(
+                `Sequential scan on "${relationName}" removes ${removedRows.toLocaleString()} rows. ` +
+                `Consider an index on the filtered column(s).`,
+              );
+            }
+            if (sharedReadVal > 100) {
+              analysis.push(
+                `Sequential scan on "${relationName}" reads ${sharedReadVal} disk blocks. ` +
+                `An index could reduce I/O.`,
+              );
+            }
+          }
+
+          // Detect Hash Join with high cost
+          if (nodeType === "Hash Join" && totalCostVal > 1000) {
+            analysis.push(
+              `Hash Join with total cost ${totalCostVal.toFixed(0)}. ` +
+              `Ensure join columns are indexed.`,
+            );
+          }
+
+          // Detect Sort operations
+          if (nodeType === "Sort") {
+            const sortMethod = node.sortMethod as string ?? null;
+            if (sortMethod && sortMethod.includes("external")) {
+              analysis.push(
+                `External sort detected — sorting exceeded work_mem. ` +
+                `Consider increasing work_mem or adding an index to avoid the sort.`,
+              );
+            }
+          }
+
+          // Detect high-cost nodes
+          if (totalCostVal > 10000 && depth > 0) {
+            analysis.push(
+              `High-cost ${nodeType}${relationName ? ` on "${relationName}"` : ""} ` +
+              `(cost: ${totalCostVal.toFixed(0)}, rows: ${planRows}).`,
+            );
+          }
+
+          // Recurse into child plans
+          const plans = node.Plans as Record<string, unknown>[] ?? [];
+          for (const child of plans) {
+            walkPlan(child, depth + 1);
+          }
+        }
+
+        for (const node of plan) {
+          walkPlan(node as Record<string, unknown>, 0);
+        }
+
+        // Buffer analysis
+        if (sharedHit !== null && sharedRead !== null) {
+          const totalBlocks = sharedHit + sharedRead;
+          if (totalBlocks > 0) {
+            const hitRate = ((sharedHit / totalBlocks) * 100).toFixed(1);
+            if (Number(hitRate) < 90) {
+              analysis.push(
+                `Buffer cache hit rate: ${hitRate}% (${sharedHit} hit, ${sharedRead} read from disk). ` +
+                `Below 90% — consider increasing shared_buffers or checking table bloat.`,
+              );
+            }
+          }
+        }
+
+        // Temp file usage
+        if (tempRead && tempRead > 0) {
+          analysis.push(
+            `Query uses temporary files (${tempRead} temp read blocks). ` +
+            `Increase work_mem to avoid disk spills.`,
+          );
+        }
+
+        if (analysis.length === 0) {
+          analysis.push("No major issues detected. Query plan looks reasonable.");
+        }
+
+        logRequest("db_explain", Date.now() - t0);
+        return textResponse({
+          query: sql,
+          plan: plan,
+          summary: {
+            planningTimeMs: planningTime,
+            executionTimeMs: executionTime,
+            totalCost,
+            rows: actualRows,
+            sharedHitBlocks: sharedHit,
+            sharedReadBlocks: sharedRead,
+            tempReadBlocks: tempRead,
+            tempWrittenBlocks: tempWritten,
+          },
+          analysis,
+        });
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
     },
 
     db_raw_query: async (args: z.infer<typeof RawQueryArgs>) => {
