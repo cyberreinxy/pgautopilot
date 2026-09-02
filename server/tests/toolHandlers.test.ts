@@ -233,3 +233,523 @@ describe("db_create high-risk warning", () => {
     expect(payload.warnings).toEqual([expect.stringContaining("HIGH-RISK")]);
   });
 });
+
+describe("db_explain", () => {
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
+
+  it("rejects non-SELECT queries", async () => {
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    await expect(
+      handlers.db_explain({ query: "UPDATE users SET email = 'x'", analyze: true, buffers: true }),
+    ).rejects.toThrow(/only accepts SELECT/);
+  });
+
+  it("rejects INSERT queries", async () => {
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    await expect(
+      handlers.db_explain({ query: "INSERT INTO users (email) VALUES ('a@b.com')", analyze: true, buffers: true }),
+    ).rejects.toThrow(/only accepts SELECT/);
+  });
+
+  it("runs EXPLAIN ANALYZE and returns plan with analysis", async () => {
+    const explainPlan = [
+      {
+        nodeType: "Seq Scan",
+        relationName: "users",
+        startupCost: 0,
+        totalCost: 15,
+        planRows: 1000,
+        actualRows: 1000,
+        actualLoops: 1,
+        sharedHitBlocks: 10,
+        sharedReadBlocks: 0,
+        filter: "(email ~~ '%@example.com%'::text)",
+        rowsRemovedByFilter: 9000,
+      },
+    ];
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_explain({
+      query: "SELECT * FROM users WHERE email LIKE '%@example.com%'",
+      analyze: true,
+      buffers: true,
+    });
+
+    const payload = firstText(result) as {
+      query: string;
+      plan: unknown[];
+      summary: { totalCost: number | null; executionTimeMs: number | null };
+      analysis: string[];
+    };
+
+    expect(payload.query).toContain("SELECT");
+    expect(payload.plan).toEqual(explainPlan);
+    expect(payload.analysis).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Sequential scan"),
+      ]),
+    );
+  });
+
+  it("returns ok message when no issues detected", async () => {
+    const explainPlan = [
+      {
+        nodeType: "Index Scan",
+        relationName: "users",
+        startupCost: 0,
+        totalCost: 8,
+        planRows: 1,
+        actualRows: 1,
+        actualLoops: 1,
+        sharedHitBlocks: 1,
+        sharedReadBlocks: 0,
+      },
+    ];
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_explain({
+      query: "SELECT * FROM users WHERE id = 1",
+      analyze: true,
+      buffers: true,
+    });
+
+    const payload = firstText(result) as { analysis: string[] };
+    expect(payload.analysis).toEqual([
+      expect.stringContaining("No major issues detected"),
+    ]);
+  });
+
+  it("strips trailing semicolon from query", async () => {
+    const explainPlan = [{ nodeType: "Result", totalCost: 0, planRows: 1 }];
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_explain({
+      query: "SELECT 1;",
+      analyze: false,
+      buffers: false,
+    });
+
+    const payload = firstText(result) as { query: string; plan: unknown[] };
+    expect(payload.query).toBe("SELECT 1");
+    expect(payload.plan).toEqual(explainPlan);
+  });
+
+  it("respects analyze=false and buffers=false", async () => {
+    const explainPlan = [{ nodeType: "Result", totalCost: 0, planRows: 1 }];
+    let capturedSql = "";
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            capturedSql = sql;
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    await handlers.db_explain({
+      query: "SELECT 1",
+      analyze: false,
+      buffers: false,
+    });
+
+    expect(capturedSql).toBe("EXPLAIN (FORMAT JSON) SELECT 1");
+  });
+
+  it("includes ANALYZE and BUFFERS when enabled", async () => {
+    const explainPlan = [{ nodeType: "Result", totalCost: 0, planRows: 1 }];
+    let capturedSql = "";
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            capturedSql = sql;
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    await handlers.db_explain({
+      query: "SELECT 1",
+      analyze: true,
+      buffers: true,
+    });
+
+    expect(capturedSql).toContain("ANALYZE");
+    expect(capturedSql).toContain("BUFFERS");
+    expect(capturedSql).toContain("FORMAT JSON");
+  });
+
+  it("detects high-cost hash joins in analysis", async () => {
+    const explainPlan = [
+      {
+        nodeType: "Hash Join",
+        totalCost: 50000,
+        planRows: 1000,
+        actualRows: 1000,
+        sharedHitBlocks: 100,
+        sharedReadBlocks: 0,
+        Plans: [],
+      },
+    ];
+    pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          const sql = String(text);
+          if (sql.startsWith("EXPLAIN")) {
+            return { rows: [{ "QUERY PLAN": explainPlan }] };
+          }
+          return { rows: [], rowCount: 0 };
+        },
+        release: () => undefined,
+      }),
+      query: async () => ({ rows: [], rowCount: 0 }),
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_explain({
+      query: "SELECT * FROM a JOIN b ON a.id = b.a_id",
+      analyze: true,
+      buffers: true,
+    });
+
+    const payload = firstText(result) as { analysis: string[] };
+    expect(payload.analysis).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Hash Join"),
+      ]),
+    );
+  });
+});
+
+describe("db_health extended checks", () => {
+  let pool: Pool;
+  beforeEach(() => {
+    pool = createStubPool();
+    invalidateSchemaCache(pool);
+  });
+
+  it("returns vacuum, replication, indexes, and sequences checks", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") {
+          return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        }
+        if (sql.includes("pg_stat_user_tables") && sql.includes("relfrozenxid")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("pg_stat_replication")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("pg_stat_user_indexes") && sql.includes("idx_scan = 0")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("information_schema.sequences")) {
+          return { rows: [], rowCount: 0 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      status: string;
+      healthChecks: {
+        vacuum: { status: string };
+        replication: { status: string };
+        indexes: { status: string };
+        sequences: { status: string };
+      };
+    };
+
+    expect(payload.status).toBe("connected");
+    expect(payload.healthChecks.vacuum.status).toBe("ok");
+    expect(payload.healthChecks.replication.status).toBe("no_replicas");
+    expect(payload.healthChecks.indexes.status).toBe("ok");
+    expect(payload.healthChecks.sequences.status).toBe("ok");
+  });
+
+  it("reports tables at risk of TXID wraparound", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") {
+          return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        }
+        if (sql.includes("relfrozenxid")) {
+          return {
+            rows: [
+              {
+                schemaname: "public",
+                relname: "logs",
+                n_dead_tup: 5000000,
+                n_live_tup: 100000,
+                last_vacuum: null,
+                last_autovacuum: null,
+                last_analyze: null,
+                last_autoanalyze: null,
+                xid_age: 150000000,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        vacuum: {
+          warning: string;
+          tables: { relname: string; xid_age: number }[];
+        };
+      };
+    };
+
+    expect(payload.healthChecks.vacuum.warning).toContain("TXID wraparound");
+    expect(payload.healthChecks.vacuum.tables).toHaveLength(1);
+    const vacuumTable = payload.healthChecks.vacuum.tables[0]!;
+    expect(vacuumTable.relname).toBe("logs");
+  });
+
+  it("reports unused indexes", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes") && sql.includes("idx_scan = 0")) {
+          return {
+            rows: [
+              {
+                schemaname: "public",
+                relname: "orders",
+                indexrelname: "idx_orders_old_status",
+                idx_scan: 0,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        indexes: {
+          warning: string;
+          unused: { indexrelname: string }[];
+        };
+      };
+    };
+
+    expect(payload.healthChecks.indexes.warning).toContain("unused");
+    expect(payload.healthChecks.indexes.unused).toHaveLength(1);
+    const unusedIndex = payload.healthChecks.indexes.unused[0]!;
+    expect(unusedIndex.indexrelname).toBe("idx_orders_old_status");
+  });
+
+  it("reports sequences nearing max value", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) {
+          return {
+            rows: [
+              {
+                sequencename: "users_id_seq",
+                schema_name: "public",
+                last_value: 2100000000,
+                max_value: 2147483647,
+                pct_used: 97.8,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        sequences: {
+          warning: string;
+          sequences: { sequencename: string; pct_used: number }[];
+        };
+      };
+    };
+
+    expect(payload.healthChecks.sequences.warning).toContain("80%");
+    expect(payload.healthChecks.sequences.sequences).toHaveLength(1);
+    const seq = payload.healthChecks.sequences.sequences[0]!;
+    expect(seq.sequencename).toBe("users_id_seq");
+  });
+
+  it("reports replica lag", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        if (sql.includes("relfrozenxid")) return { rows: [], rowCount: 0 };
+        if (sql.includes("pg_stat_replication")) {
+          return {
+            rows: [
+              {
+                client_addr: "10.0.0.2",
+                state: "streaming",
+                sent_lsn: "0/1000000",
+                write_lsn: "0/1000000",
+                flush_lsn: "0/1000000",
+                replay_lsn: "0/0FF000",
+                replay_lag_bytes: 65536,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes("pg_stat_user_indexes")) return { rows: [], rowCount: 0 };
+        if (sql.includes("information_schema.sequences")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      healthChecks: {
+        replication: {
+          replicas: number;
+          lagging: number;
+          details: { client_addr: string; replay_lag_bytes: number }[];
+        };
+      };
+    };
+
+    expect(payload.healthChecks.replication.replicas).toBe(1);
+    expect(payload.healthChecks.replication.lagging).toBe(0);
+    const replDetail = payload.healthChecks.replication.details[0]!;
+    expect(replDetail.replay_lag_bytes).toBe(65536);
+  });
+
+  it("handles health check query errors gracefully", async () => {
+    pool = {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => undefined,
+      }),
+      query: async (text: string) => {
+        const sql = String(text);
+        if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }], rowCount: 1 };
+        // All health check queries fail
+        throw new Error("permission denied for table pg_stat_user_tables");
+      },
+    } as unknown as Pool;
+
+    const handlers = createHandlers(pool, developmentSafety(), CONFIG);
+    // Should not throw — health checks are best-effort
+    const result = await handlers.db_health({});
+    const payload = firstText(result) as {
+      status: string;
+      healthChecks: Record<string, unknown>;
+    };
+
+    expect(payload.status).toBe("connected");
+    // healthChecks should still be present (with ok/null values from failed queries)
+    expect(payload.healthChecks).toBeDefined();
+  });
+});
