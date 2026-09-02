@@ -98,6 +98,7 @@ export interface AppConfig {
   allowRawWrites: boolean;
   schemas: string[];
   disabledTools: Set<string>;
+  pgVersion?: string;
 }
 
 export function isLocalHost(host: string): boolean {

@@ -8,6 +8,7 @@ import { createHandlers } from "./toolHandlers.js";
 import { ConnectionManager, buildDatabaseEntry } from "./connectionManager.js";
 import { watchConfig } from "./configWatcher.js";
 import { log } from "./logger.js";
+import { startHttpTransport } from "./httpTransport.js";
 
 process.on("unhandledRejection", (reason) => {
   log.error(`Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
@@ -79,14 +80,46 @@ function registerTools(
 }
 
 async function main() {
+  const argv = process.argv.slice(2);
+
+  // --- Detect transport mode ---
+  const transportArg = argv.find((a) => a.startsWith("--transport="));
+  const transportMode = transportArg?.split("=")[1] ?? "stdio";
+  const portArg = argv.find((a) => a.startsWith("--port="));
+  const httpPort = portArg ? parseInt(portArg.split("=")[1] ?? "3000", 10) : 3000;
+
+  if (transportMode === "http") {
+    log.info(`Starting in HTTP mode on port ${httpPort}`);
+    await startHttpTransport(
+      async () => {
+        const s = new McpServer({
+          name: "pgautopilot",
+          title: "PGAutoPilot -- PostgreSQL AI Assistant",
+          version: "2.3.0",
+        });
+        await setupServer(s, argv);
+        return { server: s, cleanup: async () => { await s.close(); } };
+      },
+      { port: httpPort },
+    );
+    return;
+  }
+
+  // --- Stdio mode (default) ---
   const server = new McpServer({
     name: "pgautopilot",
     title: "PGAutoPilot -- PostgreSQL AI Assistant",
     version: "2.3.0",
   });
 
-  const argv = process.argv.slice(2);
+  await setupServer(server, argv);
 
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  log.info("PGAutoPilot v2.3.0 ready");
+}
+
+async function setupServer(server: McpServer, argv: string[]) {
   // --- Detect configuration mode (single vs multi-database) ---
   let configMode: ReturnType<typeof detectConfigMode> | null = null;
   try {
@@ -113,8 +146,6 @@ async function main() {
       ],
     });
     registerTools(server, { mcp_status: statusHandler }, new Set<string>());
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
     log.warn(
       "PGAutoPilot started in not-configured mode. Fix DATABASE_URL in the .env and restart.",
     );
@@ -150,6 +181,15 @@ async function main() {
     try {
       await waitForConnection(pool, 5, 2000);
       log.info(`Connected to ${connectionSummary(config.poolConfig)}`);
+      // Detect PostgreSQL version
+      try {
+        const ver = await pool.query("SELECT version()");
+        const pgVersion = ver.rows[0]?.version as string ?? "unknown";
+        log.info(`PostgreSQL: ${pgVersion}`);
+        config.pgVersion = pgVersion;
+      } catch {
+        // Version detection is best-effort
+      }
     } catch (err) {
       log.error(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
       log.error("Ensure DATABASE_URL points to a reachable PostgreSQL instance.");
@@ -160,6 +200,7 @@ async function main() {
     const handlers = createHandlers(pool, safety, config);
     const untypedHandlers = handlers as Record<string, (args: unknown) => Promise<ToolResult>>;
 
+    const pgVersion = config.pgVersion ?? "unknown";
     const statusHandler = async (): Promise<ToolResult> => ({
       content: [
         {
@@ -168,6 +209,7 @@ async function main() {
             {
               status: "ready",
               database: connectionSummary(config.poolConfig),
+              postgresqlVersion: pgVersion,
               mode: safety.mode,
               readonly: safety.readonly,
             },
@@ -188,6 +230,7 @@ async function main() {
           text: JSON.stringify({
             name: "pgautopilot",
             version: "2.3.0",
+            postgresqlVersion: pgVersion,
             mode: safety.mode,
             readonly: safety.readonly,
             database: connectionSummary(config.poolConfig),
@@ -307,8 +350,19 @@ async function main() {
 
   // Connect to the default database at startup (required)
   let defaultEntry;
+  let pgVersion = "unknown";
   try {
     defaultEntry = await manager.connectDefault();
+    // Detect PostgreSQL version
+    if (defaultEntry?.pool) {
+      try {
+        const ver = await defaultEntry.pool.query("SELECT version()");
+        pgVersion = ver.rows[0]?.version as string ?? "unknown";
+        log.info(`PostgreSQL: ${pgVersion}`);
+      } catch {
+        // Version detection is best-effort
+      }
+    }
   } catch (err) {
     log.error(`Failed to connect to default database: ${err instanceof Error ? err.message : String(err)}`);
     log.error("Other databases will connect on first use.");
@@ -374,6 +428,7 @@ async function main() {
           {
             status: "ready",
             mode: "multi-database",
+            postgresqlVersion: pgVersion,
             current_default: manager.getDefaultName(),
             databases: dbList.map((d) => ({
               name: d.name,
@@ -400,6 +455,7 @@ async function main() {
         text: JSON.stringify({
           name: "pgautopilot",
           version: "2.3.0",
+          postgresqlVersion: pgVersion,
           mode: "multi-database",
           defaultDatabase: manager.getDefaultName(),
           databases: manager.list().map((d) => ({
@@ -463,28 +519,6 @@ Start by asking for the query, or run db_explain if you already have it.`,
       },
     ],
   }));
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-
-  // Startup banner
-  log.info("Multi-database mode ready");
-  for (const entry of dbList) {
-    const statusIcon = entry.connected ? "connected" : "not connected (lazy)";
-    log.info(`  [${entry.name}] ${entry.connection} — ${statusIcon} | readonly: ${entry.readonly}`);
-  }
-
-  // Watch config file for changes
-  const configWatcher = watchConfig(manager, { globalReadonly: resolved.globalReadonly });
-
-  const shutdown = async () => {
-    configWatcher.stop();
-    await server.close();
-    await manager.closeAll();
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
 }
 
 main().catch((err) => {

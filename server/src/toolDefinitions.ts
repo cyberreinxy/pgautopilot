@@ -265,7 +265,7 @@ Returns: JSON with tables (each containing columns with type, nullable, default,
   },
   db_health: {
     title: "Database Health",
-    description: `Checks database connectivity, connection pool statistics, server uptime, and total request count. In multi-database mode, omit the database parameter to see health status for all configured databases simultaneously. Also runs PostgreSQL system checks: vacuum health (TXID wraparound risk), replication lag, index usage, and sequence exhaustion.
+    description: `Checks database connectivity, connection pool statistics, server uptime, and total request count. In multi-database mode, omit the database parameter to see health status for all configured databases simultaneously. Also runs PostgreSQL system checks: vacuum health (TXID wraparound risk), replication lag, index usage, sequence exhaustion, buffer cache hit rate, and invalid constraints.
 
 When to use:
 - At the start of a session to verify the database is responsive.
@@ -281,8 +281,10 @@ Behavioral notes:
 - If pool utilization is high (>80%), consider increasing PGPOOL_MAX.
 - Vacuum checks query pg_stat_user_tables — no extensions required.
 - Replication checks query pg_stat_replication — returns empty on standalone instances.
+- Buffer cache checks pg_stat_database for hit rate below 90%.
+- Constraint checks pg_constraint for invalid (unvalidated) constraints.
 
-Returns: JSON with connected (boolean), pool stats (total, idle, active), uptime seconds, total requests served, database connection summary, and health checks (vacuum, replication, indexes, sequences).`,
+Returns: JSON with connected (boolean), pool stats (total, idle, active), uptime seconds, total requests served, database connection summary, and health checks (vacuum, replication, indexes, sequences, bufferCache, constraints).`,
     inputSchema: HealthArgs,
     annotations: readOnly,
   },

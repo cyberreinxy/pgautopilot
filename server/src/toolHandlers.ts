@@ -201,21 +201,80 @@ async function suggestDbNames(pool: Pool, err: unknown): Promise<string | null> 
   }
 }
 
+interface ReplicationRow {
+  client_addr: string;
+  state: string;
+  sent_lsn: string;
+  write_lsn: string;
+  flush_lsn: string;
+  replay_lsn: string;
+  replay_lag_bytes: number;
+}
+
+interface CacheRow {
+  datname: string;
+  blks_hit: number;
+  blks_read: number;
+  hit_rate_pct: number | null;
+}
+
+interface VacuumRow {
+  schemaname: string;
+  relname: string;
+  n_dead_tup: number;
+  n_live_tup: number;
+  last_vacuum: string | null;
+  last_autovacuum: string | null;
+  last_analyze: string | null;
+  last_autoanalyze: string | null;
+  xid_age: number;
+}
+
+interface UnusedIndexRow {
+  schemaname: string;
+  relname: string;
+  indexrelname: string;
+  idx_scan: number;
+}
+
+interface SequenceRow {
+  sequencename: string;
+  schema_name: string;
+  last_value: number;
+  max_value: number;
+  pct_used: number | null;
+}
+
+interface ConstraintRow {
+  conname: string;
+  table_name: string;
+  contype: string;
+  is_invalid: boolean;
+}
+
 async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string, unknown>> {
   const checks: Record<string, unknown> = {};
 
   // Helper: run a query, return rows or null on error
-  async function safeQuery(sql: string): Promise<unknown[] | null> {
+  async function safeQuery<T = Record<string, unknown>>(sql: string): Promise<T[] | null> {
     try {
       const result = await pool.query(sql);
-      return result.rows as unknown[];
+      return result.rows as T[];
     } catch {
       return null;
     }
   }
 
+  // Helper: run a query expecting a single row, return it or null
+  async function safeQueryOne<T = Record<string, unknown>>(sql: string): Promise<T | null> {
+    const rows = await safeQuery<T>(sql);
+    if (!rows || rows.length === 0) return null;
+    const first = rows[0];
+    return first ?? null;
+  }
+
   // 1. Vacuum health — tables at risk of TXID wraparound
-  const vacuumRows = await safeQuery(
+  const vacuumRows = await safeQuery<VacuumRow>(
     `SELECT schemaname, relname, n_dead_tup, n_live_tup,
             last_vacuum, last_autovacuum, last_analyze, last_autoanalyze,
             age(relfrozenxid) as xid_age
@@ -234,13 +293,13 @@ async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string,
   }
 
   // 2. Replication health
-  const replRows = await safeQuery(
+  const replRows = await safeQuery<ReplicationRow>(
     `SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
             pg_wal_lsn_diff(sent_lsn, replay_lsn) AS replay_lag_bytes
      FROM pg_stat_replication`);
   if (replRows && replRows.length > 0) {
     const lagging = replRows.filter(
-      (r) => ((r as Record<string, unknown>).replay_lag_bytes as number) > 1048576,
+      (r) => r.replay_lag_bytes > 1048576,
     );
     checks.replication = {
       replicas: replRows.length,
@@ -252,7 +311,7 @@ async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string,
   }
 
   // 3. Index health — unused and duplicate indexes
-  const unusedRows = await safeQuery(
+  const unusedRows = await safeQuery<UnusedIndexRow>(
     `SELECT schemaname, relname, indexrelname, idx_scan
      FROM pg_stat_user_indexes
      WHERE idx_scan = 0 AND indexrelname NOT LIKE '%_pkey'
@@ -268,7 +327,7 @@ async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string,
   }
 
   // 4. Sequence health — sequences nearing max value
-  const seqRows = await safeQuery(
+  const seqRows = await safeQuery<SequenceRow>(
     `SELECT sequencename, schema_name,
             last_value, max_value,
             ROUND(100.0 * last_value / NULLIF(max_value, 0), 2) AS pct_used
@@ -284,6 +343,49 @@ async function runHealthChecks(pool: Pool, mode: string): Promise<Record<string,
     };
   } else {
     checks.sequences = { status: "ok" };
+  }
+
+  // 5. Buffer cache hit rate
+  const cacheRow = await safeQueryOne<CacheRow>(
+    `SELECT datname,
+            blks_hit,
+            blks_read,
+            ROUND(100.0 * blks_hit / NULLIF(blks_hit + blks_read, 0), 2) AS hit_rate_pct
+     FROM pg_stat_database
+     WHERE datname = current_database()`);
+  if (cacheRow) {
+    const hitRate = cacheRow.hit_rate_pct;
+    if (hitRate !== null && hitRate < 90) {
+      checks.bufferCache = {
+        warning: `Buffer cache hit rate is ${hitRate}% (below 90%) — consider increasing shared_buffers`,
+        hitRatePct: hitRate,
+        blksHit: cacheRow.blks_hit,
+        blksRead: cacheRow.blks_read,
+      };
+    } else {
+      checks.bufferCache = {
+        status: "ok",
+        hitRatePct: hitRate,
+        blksHit: cacheRow.blks_hit,
+        blksRead: cacheRow.blks_read,
+      };
+    }
+  }
+
+  // 6. Constraint health — invalid constraints
+  const constraintRows = await safeQuery<ConstraintRow>(
+    `SELECT conname, conrelid::regclass AS table_name, contype,
+            NOT convalidated AS is_invalid
+     FROM pg_constraint
+     WHERE NOT convalidated
+     LIMIT 10`);
+  if (constraintRows && constraintRows.length > 0) {
+    checks.constraints = {
+      warning: `${constraintRows.length} invalid constraint(s) found — may need REVALIDATE`,
+      invalid: constraintRows,
+    };
+  } else {
+    checks.constraints = { status: "ok" };
   }
 
   return checks;
@@ -436,7 +538,7 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
     },
 
     db_health: async (args: z.infer<typeof HealthArgs>) => {
-      // --- Multi-database mode: show all databases (parallel) ---
+      // --- Multi-database mode: full health checks per database (parallel) ---
       if (connectionManager) {
         const t0 = Date.now();
         const dbList = connectionManager.list();
@@ -444,28 +546,51 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
           ? connectionManager.resolve(args.database)
           : null;
 
+        const HEALTH_TIMEOUT_MS = 10000;
+
         const checks = dbList
           .filter((d) => !targetName || d.name === targetName)
           .map(async (dbInfo) => {
-            const HEALTH_TIMEOUT_MS = 5000;
             try {
               const entry = await connectionManager.get(dbInfo.name);
               if (!entry.pool) {
                 return [dbInfo.name, { status: "not_connected" }] as const;
               }
               const checkT0 = Date.now();
+
+              // Connectivity check with timeout
               const checkPromise = entry.pool.query("SELECT 1");
               const timeoutPromise = new Promise<never>((_, reject) => {
                 setTimeout(() => reject(new Error("Health check timed out")), HEALTH_TIMEOUT_MS);
               });
               await Promise.race([checkPromise, timeoutPromise]);
               const latencyMs = Date.now() - checkT0;
+
+              // Detect PostgreSQL version for this database
+              let pgVersion = "unknown";
+              try {
+                const ver = await entry.pool.query("SELECT version()");
+                pgVersion = ver.rows[0]?.version as string ?? "unknown";
+              } catch {
+                // Best-effort
+              }
+
+              // Run full health checks (best-effort, don't fail connectivity)
+              let healthChecks: Record<string, unknown> = {};
+              try {
+                healthChecks = await runHealthChecks(entry.pool, "development");
+              } catch {
+                // Best-effort — partial results are still useful
+              }
+
               return [dbInfo.name, {
                 status: "connected",
+                postgresqlVersion: pgVersion,
                 connection: connectionSummary(entry.poolConfig),
                 readonly: entry.readonly,
                 pool: poolStats(entry.pool),
                 lastCheckLatencyMs: latencyMs,
+                healthChecks,
               }] as const;
             } catch (err) {
               return [dbInfo.name, {
@@ -495,12 +620,22 @@ export function createHandlers(pool: Pool, safety: SafetyState, config: AppConfi
         lastSuccessAt = Date.now();
         const uptime = Math.floor((Date.now() - startTime) / 1000);
 
+        // Detect PostgreSQL version
+        let pgVersion = "unknown";
+        try {
+          const ver = await pool.query("SELECT version()");
+          pgVersion = ver.rows[0]?.version as string ?? "unknown";
+        } catch {
+          // Best-effort
+        }
+
         // Run extended health checks in parallel (best-effort, don't fail the whole check)
         const healthChecks = await runHealthChecks(pool, safety.mode);
 
         logRequest("db_health", latencyMs);
         return textResponse({
           status: "connected",
+          postgresqlVersion: pgVersion,
           uptimeSeconds: uptime,
           totalRequests: requestCount,
           pool: poolStats(pool),
