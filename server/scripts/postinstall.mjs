@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { homedir, platform } from "os";
 import { fileURLToPath } from "url";
+import { execFileSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -295,6 +296,16 @@ function run() {
             "",
         ].join("\n");
         writeFileSync(envExample, envContent, "utf-8");
+    }
+
+    // Merge PGAutoPilot skills into existing skill lock file (if any)
+    try {
+        const mergeScript = resolve(__dirname, "merge-skills-lock.mjs");
+        if (existsSync(mergeScript)) {
+            execFileSync(process.execPath, [mergeScript, "--target", projectRoot], { stdio: "pipe" });
+        }
+    } catch {
+        // Best-effort — don't fail postinstall if skill lock merge fails
     }
 
     const envExists = existsSync(resolve(projectRoot, ".env"));

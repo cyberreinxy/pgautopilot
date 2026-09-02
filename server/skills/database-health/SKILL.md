@@ -29,6 +29,7 @@ PGAutoPilot's `db_health` tool provides comprehensive health checks beyond basic
 - **Pool stats**: total, idle, waiting connections
 - **Uptime**: how long the server has been running
 - **Latency**: response time of the last health check
+- **PostgreSQL version**: detected at startup and per-database
 
 ### Vacuum Health
 Checks for tables approaching **TXID wraparound** (>100M transactions since last freeze).
@@ -49,6 +50,16 @@ Finds **unused indexes** (0 scans, non-primary-key).
 Finds **sequences nearing max value** (>80% exhausted).
 - **Why it matters**: Exhausted sequences cause INSERT failures
 - **Fix**: `ALTER SEQUENCE seq RESTART WITH 1` or switch to `BIGINT GENERATED ALWAYS AS IDENTITY`
+
+### Buffer Cache Hit Rate
+Checks if the **buffer cache hit rate** is below 90%.
+- **Why it matters**: Low hit rate means PostgreSQL reads from disk instead of memory — slow queries
+- **Fix**: Increase `shared_buffers` in postgresql.conf, or check for table bloat
+
+### Constraint Health
+Finds **invalid constraints** (e.g., after a failed recovery or interrupted `ALTER TABLE`).
+- **Why it matters**: Invalid constraints are not enforced — data integrity is compromised
+- **Fix**: `ALTER TABLE ... VALIDATE CONSTRAINT ...` to re-validate
 
 ## Usage
 
@@ -112,3 +123,29 @@ db_health(database="analytics")  # Check specific database
 }
 ```
 **Action**: `ALTER SEQUENCE users_id_seq RESTART WITH 1;` (or add a new column with BIGINT IDENTITY)
+
+### Warning: Low Buffer Cache Hit Rate
+```json
+{
+  "bufferCache": {
+    "warning": "Buffer cache hit rate is 75.0% (below 90%) — consider increasing shared_buffers",
+    "hitRatePct": 75.0,
+    "blksHit": 1000,
+    "blksRead": 3000
+  }
+}
+```
+**Action**: Increase `shared_buffers` in postgresql.conf, or investigate table bloat.
+
+### Warning: Invalid Constraints
+```json
+{
+  "constraints": {
+    "warning": "2 invalid constraint(s) found — may need REVALIDATE",
+    "invalid": [
+      { "conname": "fk_orders_user", "table_name": "orders", "contype": "f" }
+    ]
+  }
+}
+```
+**Action**: `ALTER TABLE orders VALIDATE CONSTRAINT fk_orders_user;`

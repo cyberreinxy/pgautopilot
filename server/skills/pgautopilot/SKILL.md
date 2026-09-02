@@ -89,3 +89,34 @@ db_find_many(table="users", take=20, skip=40)  # page 3, 20 per page
 - **Don't skip `dryRun`.** Always preview writes before committing.
 - **Don't ignore `db_health`.** Check health at the start of a session to catch connection issues early.
 - **Don't assume table names.** Always use `db_overview` first to discover the actual schema.
+
+## MCP Resources
+
+PGAutoPilot exposes two MCP resources for agent context:
+
+| Resource | URI | Returns |
+|----------|-----|----------|
+| Status | `pgautopilot://status` | Server name, version, mode, PostgreSQL version, database list with connection status |
+| Schema | `pgautopilot://schema` | Points to the `db_schema` tool for column-level detail |
+
+Use these to quickly understand the server state without running tools.
+
+## MCP Prompts
+
+PGAutoPilot provides guided workflows via MCP prompts:
+
+| Prompt | Workflow |
+|--------|----------|
+| `explore-database` | Overview → Schema → Relationships → Summary |
+| `diagnose-query` | Get query → `db_explain` → Analyze plan → Suggest fixes |
+
+These are structured workflows — load them when the user's request matches the pattern.
+
+## PostgreSQL Version Detection
+
+PGAutoPilot detects the PostgreSQL version at startup and per-database in multi-db mode. The version is included in:
+- `db_health` results (`postgresqlVersion` field)
+- `pgautopilot://status` resource
+- Startup logs
+
+This helps with version-specific behavior (e.g., JSON functions, identity columns, logical replication).

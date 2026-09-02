@@ -73,17 +73,17 @@ db_delete_many(table="logs", where={"created_at": {"lt": "2025-01-01"}}, dryRun=
 - **confirmAll required** for empty filter `{}`
 - **ALWAYS dry-run first** — deleted data cannot be recovered
 
-## Safety Features
+## Safety Features### Blocked Tables
 
-### Blocked Tables
-某些表被配置为阻止写入。尝试写入这些表会返回错误。
+Some tables are configured to block all writes. Attempting to write to them returns an error:
 ```
 db_create(table="audit_log", data={...})
 // Error: Table "audit_log" is blocked from writes.
 ```
 
 ### High-Risk Tables
-某些表被标记为高风险 — 写入会触发警告但允许继续。
+
+Some tables are marked as high-risk — writes trigger a warning but are allowed to proceed:
 ```
 db_create(table="users", data={...})
 // Warning: [HIGH-RISK] Table "users" is marked as high-risk.
