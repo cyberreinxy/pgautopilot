@@ -7,6 +7,7 @@
         "-y",
         "pgautopilot"
       ],
+      "cwd": "${workspaceFolder}",
       "enabled": true
     }
   }

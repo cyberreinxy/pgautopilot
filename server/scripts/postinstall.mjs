@@ -9,11 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Entry definitions — no `env: {}` (PGAutoPilot reads .env files directly)
 // ---------------------------------------------------------------------------
 
-export const PG_ENTRY = { command: "npx", args: ["pgautopilot"] };
-export const OPENCODE_ENTRY = { type: "local", command: ["npx", "-y", "pgautopilot"], enabled: true };
-export const CLINE_ENTRY = { command: "npx", args: ["-y", "pgautopilot"], disabled: false, autoApprove: [] };
-export const ROO_ENTRY = { command: "npx", args: ["-y", "pgautopilot"], alwaysAllow: [], disabled: false };
-export const ZED_ENTRY = { command: "npx", args: ["-y", "pgautopilot"] };
+export const PG_ENTRY = { command: "npx", args: ["pgautopilot"], cwd: "${workspaceFolder}" };
+export const OPENCODE_ENTRY = { type: "local", command: ["npx", "-y", "pgautopilot"], cwd: "${workspaceFolder}", enabled: true };
+export const CLINE_ENTRY = { command: "npx", args: ["-y", "pgautopilot"], cwd: "${workspaceFolder}", disabled: false, autoApprove: [] };
+export const ROO_ENTRY = { command: "npx", args: ["-y", "pgautopilot"], cwd: "${workspaceFolder}", alwaysAllow: [], disabled: false };
+export const ZED_ENTRY = { command: "npx", args: ["-y", "pgautopilot"], cwd: "${workspaceFolder}" };
 export const CONFIG_DIR = "config";
 
 // ---------------------------------------------------------------------------
@@ -266,9 +266,11 @@ function run() {
     else skipped++;
 
     const claudePath = claudeConfigPath();
-    const claudeSnippet = JSON.stringify({ mcpServers: { pgautopilot: PG_ENTRY } }, null, 2);
+    // Claude Desktop doesn't support cwd — use env for DATABASE_URL instead
+    const claudeEntry = { command: "pgautopilot" };
+    const claudeSnippet = JSON.stringify({ mcpServers: { pgautopilot: claudeEntry } }, null, 2);
     if (existsSync(claudePath)) {
-        const result = writeEditorConfig(claudePath, "mcpServers", { ...PG_ENTRY });
+        const result = writeEditorConfig(claudePath, "mcpServers", { ...claudeEntry });
         if (result === "created") created++;
         else if (result === "merged") merged++;
         else skipped++;

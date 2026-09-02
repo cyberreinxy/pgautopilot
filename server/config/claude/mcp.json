@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "pgautopilot": {
-      "command": "pgautopilot"
+      "command": "pgautopilot",
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/yourdb"
+      }
     }
   }
 }
