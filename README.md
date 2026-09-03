@@ -11,6 +11,7 @@
 [![Express](https://img.shields.io/badge/Express-111111?style=for-the-badge&logo=express&logoColor=33FF99)](https://expressjs.com)
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-111111?style=for-the-badge&logo=tailwindcss&logoColor=33FF99)](https://tailwindcss.com)
 [![pgautopilot MCP server](https://glama.ai/mcp/servers/cyberreinxy/pgautopilot/badges/score.svg)](https://glama.ai/mcp/servers/cyberreinxy/pgautopilot)
+[![CI](https://github.com/cyberreinxy/pgautopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/cyberreinxy/pgautopilot/actions/workflows/ci.yml)
 
 **Model-agnostic PostgreSQL access for AI assistants, plus a hardened web dashboard.**
 
