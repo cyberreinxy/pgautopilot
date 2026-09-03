@@ -1,0 +1,16 @@
+web/
+.git/
+.gitignore
+.github/
+docs/
+.env
+.env.example
+AGENTS.md
+SECURITY.md
+glama.json
+README.md
+.dockerignore
+node_modules/
+server/node_modules/
+server/dist/
+server/.env

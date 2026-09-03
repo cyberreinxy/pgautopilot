@@ -2,5 +2,44 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": [
     "cyberreinxy"
-  ]
+  ],
+  "title": "pgautopilot",
+  "display_name": "PGAutoPilot",
+  "description": "PGAutoPilot — an MCP server that lets AI assistants safely explore, query, and manage any PostgreSQL database. Schema-aware, production-safe, zero setup. Supports natural language to SQL, redaction, read-only mode, blocked tables, and a hardened web dashboard.",
+  "version": "2.4.0",
+  "repository": "https://github.com/cyberreinxy/pgautopilot",
+  "homepage": "https://github.com/cyberreinxy/pgautopilot",
+  "license": "MIT",
+  "language": "TypeScript",
+  "runtime": "node",
+  "categories": [
+    "databases",
+    "developer-tools"
+  ],
+  "tags": [
+    "postgresql",
+    "postgres",
+    "database",
+    "sql",
+    "mcp-server",
+    "schema-introspection",
+    "auto-discovery",
+    "zero-setup",
+    "safety-controls",
+    "read-only-mode",
+    "ssl",
+    "pg_dump",
+    "query-builder",
+    "multi-database",
+    "production-safe"
+  ],
+  "mcpServers": {
+    "pgautopilot": {
+      "command": "pgautopilot"
+    }
+  },
+  "installation": {
+    "npm": "npm install -g pgautopilot",
+    "docker": "docker run --rm -i ghcr.io/cyberreinxy/pgautopilot:2.4.0"
+  }
 }
